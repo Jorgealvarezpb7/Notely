@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Settings > General: the font and the text size of every note and list.
-/// Both change every window at once, while the user chooses.
+/// Settings > General: the font and the text size of every note and list,
+/// and whether notes animate into and out of the Dock. Each change applies
+/// to every window at once, while the user chooses.
 struct GeneralPane: View {
     let appearance: TextAppearance
+    @AppStorage(NoteAnimation.key) private var animateNotes = true
 
     private var family: Binding<FontFamily> {
         Binding(
@@ -42,6 +44,9 @@ struct GeneralPane: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
+            }
+            Section("Windows") {
+                Toggle("Animate closing and opening notes", isOn: $animateNotes)
             }
         }
         .formStyle(.grouped)

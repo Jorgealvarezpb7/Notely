@@ -68,7 +68,6 @@ public final class TextAppearance {
     /// slant when the font has none (American Typewriter).
     func noteAttributes(bold: Bool, italic: Bool) -> [NSAttributedString.Key: Any] {
         var font = nsFont(bold: bold)
-        var obliqueness: CGFloat = 0
         if italic {
             let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(.italic))
             if let italicFont = NSFont(descriptor: descriptor, size: font.pointSize),
@@ -76,9 +75,18 @@ public final class TextAppearance {
                italicFont.fontDescriptor.symbolicTraits.contains(.italic) {
                 font = italicFont
             } else {
-                obliqueness = 0.2
+                font = Self.slanted(font)
             }
         }
-        return [.font: font, .obliqueness: obliqueness, .foregroundColor: NSColor.textColor]
+        return [.font: font, .foregroundColor: NSColor.textColor]
+    }
+
+    /// `font` sheared to the right, for a font with no italic face. The
+    /// slant is part of the font, not an `.obliqueness` attribute, which
+    /// the TextKit 2 note editor does not draw.
+    private static func slanted(_ font: NSFont) -> NSFont {
+        let size = font.pointSize
+        let shear = AffineTransform(m11: size, m12: 0, m21: size * 0.2, m22: size, tX: 0, tY: 0)
+        return NSFont(descriptor: font.fontDescriptor, textTransform: shear) ?? font
     }
 }
