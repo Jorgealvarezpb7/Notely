@@ -14,7 +14,14 @@ let checkFill = Color(nsColor: NSColor(name: nil) { appearance in
 /// it leaves the item being edited alone.
 struct CheckCircle: View {
     let done: Bool
+    /// `false` for an issue the user may not close or reopen: the circle
+    /// shows dimmed and ignores clicks.
+    var isEnabled = true
     let action: () -> Void
+
+    private var tooltip: String {
+        isEnabled ? "" : "You can't close this issue"
+    }
 
     var body: some View {
         Button(action: action) {
@@ -30,6 +37,9 @@ struct CheckCircle: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.35)
+        .help(tooltip)
         .accessibilityLabel(done ? "Uncheck Item" : "Check Item")
     }
 }
@@ -59,13 +69,19 @@ enum ListRow: Identifiable {
 struct ListView: View {
     let store: NoteStore
     let appearance: TextAppearance
+    let account: GitHubAccount
+    let sync: SyncController
     let linkPages: LinkPageStore
     let id: UUID
     var onClose: () -> Void
     var onDelete: () -> Void
+    var onSettings: (SettingsPane) -> Void
     @StateObject private var focus = ListFocus()
 
     private var items: [ListItem] { store.note(id)?.items ?? [] }
+
+    /// A list linked to a repository follows the issue-sync rules.
+    private var isLinked: Bool { store.note(id)?.githubRepo != nil }
 
     /// One array for one `ForEach`, so an item keeps its identity when it
     /// moves between the unchecked and checked groups and slides there.
@@ -118,7 +134,7 @@ struct ListView: View {
             NoteStrip(onClose: onClose, onDelete: onDelete)
         }
         .overlay(alignment: .bottom) {
-            BottomBar(store: store, appearance: appearance, id: id)
+            BottomBar(store: store, account: account, sync: sync, id: id, onSettings: onSettings)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(NoteBackground(tint: store.note(id)?.tint))
@@ -130,19 +146,22 @@ struct ListView: View {
     private func rowView(_ row: ListRow) -> some View {
         switch row {
         case .item(let item):
+            let editable = sync.isEditable(item, in: id)
             // The card lines up with the item's text, past the circle.
             LinkCardAbove(text: item.text, pages: linkPages, indent: 24 + 6) {
                 HStack(alignment: .top, spacing: 6) {
-                    CheckCircle(done: item.done) { toggle(item.id) }
+                    CheckCircle(done: item.done, isEnabled: editable) { toggle(item.id) }
                     ListField(text: item.text,
                               placeholder: "",
                               font: appearance.nsFont(bold: false),
                               done: item.done,
                               canToggle: true,
+                              isEditable: editable,
                               target: .item(item.id),
                               focus: focus,
                               onChange: { store.setItemText($0, item: item.id, for: id) },
-                              onEndEditing: { removeIfEmpty(item.id) },
+                              onBeginEditing: { sync.setFocused(item.id, in: id) },
+                              onEndEditing: { endEditing(item.id) },
                               onCommand: { handle($0, at: .item(item.id)) })
                         .padding(.top, 3)
                 }
@@ -166,10 +185,35 @@ struct ListView: View {
         }
     }
 
+    /// Checks or unchecks an item. On a linked list, only an item the user
+    /// may close or reopen, and the change is sent to GitHub.
     private func toggle(_ itemID: UUID) {
+        guard let item = items.first(where: { $0.id == itemID }), sync.isEditable(item, in: id) else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
             store.toggleItem(itemID, for: id)
         }
+        if isLinked {
+            sync.itemsChanged(id)
+        }
+    }
+
+    /// An item lost keyboard focus. On a linked list, an emptied item with
+    /// an issue gets its issue's title back instead of being removed, and
+    /// the list's changes are sent.
+    private func endEditing(_ itemID: UUID) {
+        if sync.focused[id] == itemID {
+            sync.setFocused(nil, in: id)
+        }
+        guard isLinked else {
+            removeIfEmpty(itemID)
+            return
+        }
+        if let item = items.first(where: { $0.id == itemID }), item.text.isEmpty, item.issueNumber != nil {
+            store.setItemText(item.remoteTitle ?? "", item: itemID, for: id)
+        } else {
+            removeIfEmpty(itemID)
+        }
+        sync.itemsChanged(id)
     }
 
     /// An item left empty when it loses keyboard focus is removed.
@@ -201,6 +245,11 @@ struct ListView: View {
             return true
         case .deleteEmpty:
             guard case .item(let itemID) = target, index > 0 else { return false }
+            // An item with an issue cannot be emptied away: GitHub keeps
+            // the issue, so the item stays.
+            if isLinked, items.first(where: { $0.id == itemID })?.issueNumber != nil {
+                return true
+            }
             store.removeItem(itemID, for: id)
             focus.request = targets[index - 1]
             return true

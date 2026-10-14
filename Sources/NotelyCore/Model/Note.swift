@@ -2,15 +2,31 @@ import Foundation
 
 /// One checklist item. A list's `items` are kept in display order: the
 /// unchecked items, then the checked items, most recently checked first.
+///
+/// `issueNumber` is the GitHub issue the item stands for, on a list linked
+/// to a repository. `nil` there means the issue is still to be created.
+///
+/// `remoteTitle`, `remoteClosed`, and `issueAuthor` are the issue as last
+/// seen on GitHub. Where `text` or `done` differ from them, a change is
+/// waiting to be sent (see `IssueSync.pendingChanges`).
 public struct ListItem: Codable, Identifiable, Equatable {
     public let id: UUID
     public var text: String
     public var done: Bool
+    public var issueNumber: Int?
+    public var remoteTitle: String?
+    public var remoteClosed: Bool?
+    public var issueAuthor: String?
 
-    public init(id: UUID, text: String, done: Bool) {
+    public init(id: UUID, text: String, done: Bool, issueNumber: Int? = nil,
+                remoteTitle: String? = nil, remoteClosed: Bool? = nil, issueAuthor: String? = nil) {
         self.id = id
         self.text = text
         self.done = done
+        self.issueNumber = issueNumber
+        self.remoteTitle = remoteTitle
+        self.remoteClosed = remoteClosed
+        self.issueAuthor = issueAuthor
     }
 }
 
@@ -59,6 +75,9 @@ public struct StyleRun: Codable, Equatable {
 /// stays plain, so a build without styles still shows the note's text.
 ///
 /// `tint` is the note's color as sRGB "#RRGGBB", or nil for no tint.
+///
+/// `githubRepo` is the GitHub repository a list is linked to, as
+/// "owner/repo", or nil for an unlinked list.
 public struct Note: Codable, Identifiable {
     public let id: UUID
     public var text: String
@@ -70,6 +89,7 @@ public struct Note: Codable, Identifiable {
     public var items: [ListItem]?
     public var styles: [StyleRun]?
     public var tint: String?
+    public var githubRepo: String?
 
     public static let listKind = "list"
 
@@ -77,7 +97,8 @@ public struct Note: Codable, Identifiable {
 
     public init(id: UUID, text: String, origin: String? = nil, size: String? = nil,
                 isOpen: Bool? = nil, kind: String? = nil, title: String? = nil,
-                items: [ListItem]? = nil, styles: [StyleRun]? = nil, tint: String? = nil) {
+                items: [ListItem]? = nil, styles: [StyleRun]? = nil, tint: String? = nil,
+                githubRepo: String? = nil) {
         self.id = id
         self.text = text
         self.origin = origin
@@ -88,6 +109,7 @@ public struct Note: Codable, Identifiable {
         self.items = items
         self.styles = styles
         self.tint = tint
+        self.githubRepo = githubRepo
     }
 }
 

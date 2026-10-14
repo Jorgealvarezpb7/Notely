@@ -83,3 +83,40 @@ struct TintTests {
         #expect(TintRGB(hex: preset)?.hex == preset)
     }
 }
+
+struct GitHubFieldTests {
+    /// A list saved by a version without GitHub links.
+    @Test func listWithoutGitHubFieldsDecodesUnlinked() throws {
+        let json = """
+        [{"id":"6F9619FF-8B86-D011-B42D-00CF4FC964FF","text":"Bugs","kind":"list","title":"Bugs",
+          "items":[{"id":"7F9619FF-8B86-D011-B42D-00CF4FC964FF","text":"fix login","done":false}]}]
+        """
+        let notes = try JSONDecoder().decode([Note].self, from: Data(json.utf8))
+        #expect(notes[0].githubRepo == nil)
+        #expect(notes[0].items?[0].issueNumber == nil)
+        #expect(notes[0].items?[0].text == "fix login")
+    }
+}
+
+struct RepositoryNameTests {
+    @Test func acceptsOwnerAndName() {
+        #expect(repositoryName("acme/website") == "acme/website")
+        #expect(repositoryName("  my-org/notely.app_2 ") == "my-org/notely.app_2")
+    }
+
+    @Test(arguments: ["", "acme", "acme/web site", "a/b/c", "/x", "x/", "acme/wébsite"])
+    func rejectsOtherInput(_ input: String) {
+        #expect(repositoryName(input) == nil)
+    }
+}
+
+struct RemoteFieldTests {
+    /// An item saved by the UI-only GitHub version, kept for "Create as issues".
+    @Test func itemWithoutRemoteFieldsDecodes() throws {
+        let json = #"{"id":"7F9619FF-8B86-D011-B42D-00CF4FC964FF","text":"fix login","done":false}"#
+        let item = try JSONDecoder().decode(ListItem.self, from: Data(json.utf8))
+        #expect(item.remoteTitle == nil)
+        #expect(item.remoteClosed == nil)
+        #expect(item.issueAuthor == nil)
+    }
+}

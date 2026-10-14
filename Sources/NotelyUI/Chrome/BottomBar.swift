@@ -3,37 +3,35 @@ import NotelyCore
 import SwiftUI
 
 /// The bottom bar of note and list windows: drags the window and ends
-/// editing, with the font button, the text size button, and the tint
-/// button at the trailing edge. Note windows pass their editor state and
-/// also get the style buttons at the leading edge.
+/// editing, with the gear button and the tint button at the trailing
+/// edge. Note windows pass their editor state and also get the style
+/// buttons at the leading edge. List windows get the GitHub button there
+/// while an account is connected, and the refresh button once linked.
 struct BottomBar: View {
     let store: NoteStore
-    let appearance: TextAppearance
+    let account: GitHubAccount
+    let sync: SyncController
     let id: UUID
     var editorState: NoteEditorState? = nil
-    @StateObject private var controls = AppearanceControls()
+    var onSettings: (SettingsPane) -> Void
     @StateObject private var tintControls = TintControls()
+    @StateObject private var gitHubControls = GitHubControls()
 
     var body: some View {
         // The buttons sit on top of the click target, as in the top bar.
         ZStack {
             EndEditingView(drags: true)
-            // Fits six buttons in the minimum note width.
             HStack(spacing: 0) {
                 if let editorState {
                     StyleButtons(state: editorState)
                 }
+                if let note = store.note(id), note.isList, account.isConnected {
+                    gitHubButtons(linked: note.githubRepo != nil)
+                }
                 Spacer(minLength: 16)
                 HStack(spacing: 16) {
-                    StripButton(symbolName: "textformat", accessibilityLabel: "Font") { button in
-                        controls.appearance = appearance
-                        controls.showFontMenu(from: button)
-                    }
-                    .frame(width: StripButton.referenceSize.width,
-                           height: StripButton.referenceSize.height)
-                    StripButton(symbolName: "textformat.size", accessibilityLabel: "Text Size") { button in
-                        controls.appearance = appearance
-                        controls.toggleSizePopover(from: button)
+                    StripButton(symbolName: "gearshape", accessibilityLabel: "Settings") { _ in
+                        onSettings(.general)
                     }
                     .frame(width: StripButton.referenceSize.width,
                            height: StripButton.referenceSize.height)
@@ -54,59 +52,49 @@ struct BottomBar: View {
         .frame(height: bottomBarHeight)
         .background(barFill)
     }
-}
 
-/// Opens the bottom bar's font menu and text size popover. A class, so
-/// the open popover outlives view updates.
-final class AppearanceControls: NSObject, ObservableObject, NSPopoverDelegate {
-    var appearance: TextAppearance?
-    private var popover: NSPopover?
-    /// When the size popover last closed. A transient popover closes on
-    /// the mouse-down of the click on its own button, before the button's
-    /// action runs; that click must not open it again.
-    private var popoverClosedAt = Date.distantPast
-
-    func showFontMenu(from button: NSButton) {
-        guard let appearance else { return }
-        let menu = NSMenu()
-        for family in [FontFamily.typewriter, .system] {
-            let item = NSMenuItem(title: family.menuTitle, action: #selector(chooseFamily(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = family.rawValue
-            item.state = family == appearance.family ? .on : .off
-            menu.addItem(item)
+    /// The GitHub button, with a badge while changes wait or the token no
+    /// longer works, and the refresh button for a linked list, which spins
+    /// while the list syncs.
+    private func gitHubButtons(linked: Bool) -> some View {
+        HStack(spacing: 16) {
+            StripButton(symbolName: "arrow.triangle.branch", accessibilityLabel: "GitHub") { button in
+                gitHubControls.store = store
+                gitHubControls.account = account
+                gitHubControls.sync = sync
+                gitHubControls.id = id
+                gitHubControls.onReconnect = { onSettings(.integrations) }
+                gitHubControls.showMenu(from: button)
+            }
+            .frame(width: StripButton.referenceSize.width,
+                   height: StripButton.referenceSize.height)
+            .overlay(alignment: .topTrailing) {
+                if linked && (account.tokenRejected || sync.pendingCount(id) > 0) {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 6, height: 6)
+                        .offset(x: 2, y: -1)
+                        .allowsHitTesting(false)
+                        .accessibilityLabel("Changes not sent")
+                }
+            }
+            if linked {
+                if sync.states[id]?.isRunning == true {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.7)
+                        .frame(width: StripButton.referenceSize.width,
+                               height: StripButton.referenceSize.height)
+                        .accessibilityLabel("Refreshing Issues")
+                } else {
+                    StripButton(symbolName: "arrow.clockwise", accessibilityLabel: "Refresh Issues") { _ in
+                        sync.refresh(id)
+                    }
+                    .frame(width: StripButton.referenceSize.width,
+                           height: StripButton.referenceSize.height)
+                }
+            }
         }
-        // Below the button; AppKit moves the menu up if it would leave
-        // the screen.
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
-    }
-
-    @objc private func chooseFamily(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let family = FontFamily(rawValue: raw),
-              appearance?.family != family else { return }
-        appearance?.family = family
-    }
-
-    func toggleSizePopover(from button: NSButton) {
-        if let popover, popover.isShown {
-            popover.performClose(nil)
-            return
-        }
-        guard let appearance, Date().timeIntervalSince(popoverClosedAt) > 0.3 else { return }
-        let controller = NSHostingController(rootView: SizePopover(appearance: appearance))
-        controller.sizingOptions = .preferredContentSize
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentViewController = controller
-        popover.delegate = self
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .maxY)
-        self.popover = popover
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        popover = nil
-        popoverClosedAt = Date()
     }
 }
 
@@ -148,7 +136,8 @@ final class TintControls: NSObject, ObservableObject {
         let other = NSMenuItem(title: "Other Colors…", action: #selector(showColorPanel(_:)), keyEquivalent: "")
         other.target = self
         menu.addItem(other)
-        // Below the button, as the font menu.
+        // Below the button; AppKit moves the menu up if it would leave
+        // the screen.
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
@@ -229,36 +218,5 @@ final class TintControls: NSObject, ObservableObject {
     /// The panel may not clear a target that goes away.
     deinit {
         releasePanel()
-    }
-}
-
-/// The text size popover: a slider from 10 to 20 points that changes
-/// every note and list while the user drags, and the size in points.
-struct SizePopover: View {
-    let appearance: TextAppearance
-
-    private var size: Binding<Double> {
-        Binding(
-            get: { Double(appearance.size) },
-            set: { appearance.size = Int($0.rounded()) }
-        )
-    }
-
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 8) {
-                Text("A").font(.system(size: 10))
-                Slider(value: size,
-                       in: Double(TextAppearance.sizeRange.lowerBound)...Double(TextAppearance.sizeRange.upperBound),
-                       step: 1)
-                    .accessibilityLabel("Text Size")
-                Text("A").font(.system(size: 18))
-            }
-            Text("\(appearance.size) pt")
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .frame(width: 220)
     }
 }

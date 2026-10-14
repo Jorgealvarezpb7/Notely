@@ -2,9 +2,15 @@ import AppKit
 import SwiftUI
 
 /// Main menu the menu bar shows while the app is active. It gives every
-/// note working edit shortcuts and Cmd+Q.
+/// note working edit shortcuts, Cmd+, for Settings, and Cmd+Q.
 func makeMainMenu() -> NSMenu {
     let appMenu = NSMenu()
+    // No target: the action goes up the responder chain to the app
+    // delegate, from any key window.
+    appMenu.addItem(withTitle: "Settings…",
+                    action: #selector(AppDelegate.openSettings(_:)),
+                    keyEquivalent: ",")
+    appMenu.addItem(.separator())
     appMenu.addItem(withTitle: "Quit Notely",
                     action: #selector(NSApplication.terminate(_:)),
                     keyEquivalent: "q")

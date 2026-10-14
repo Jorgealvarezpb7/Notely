@@ -11,8 +11,10 @@ var targets: [Target] = [
 #if os(macOS)
 targets += [
     .target(name: "NotelyLinks", dependencies: ["NotelyCore"], path: "Sources/NotelyLinks"),
-    .target(name: "NotelyUI", dependencies: ["NotelyCore", "NotelyLinks"], path: "Sources/NotelyUI"),
-    .executableTarget(name: "Notely", dependencies: ["NotelyCore", "NotelyLinks", "NotelyUI"], path: "Sources/Notely"),
+    .target(name: "NotelyGitHub", dependencies: ["NotelyCore"], path: "Sources/NotelyGitHub"),
+    .target(name: "NotelyUI", dependencies: ["NotelyCore", "NotelyGitHub", "NotelyLinks"], path: "Sources/NotelyUI"),
+    .executableTarget(name: "Notely", dependencies: ["NotelyCore", "NotelyGitHub", "NotelyLinks", "NotelyUI"],
+                      path: "Sources/Notely"),
 ]
 #endif
 

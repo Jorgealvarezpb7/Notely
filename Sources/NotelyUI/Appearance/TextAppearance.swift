@@ -5,7 +5,7 @@ import SwiftUI
 enum FontFamily: String {
     case typewriter, system
 
-    /// Title of the font's entry in the font menu.
+    /// Title of the font in the Font pop-up in Settings.
     var menuTitle: String {
         switch self {
         case .typewriter: return "American Typewriter"

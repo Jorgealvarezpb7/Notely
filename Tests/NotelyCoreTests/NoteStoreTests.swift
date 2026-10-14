@@ -144,3 +144,61 @@ struct NoteStoreTests {
         #expect(repository.stored.first?.text == "Groceries\n[ ] Eggs\n[x] Milk")
     }
 }
+
+struct LinkTests {
+    @Test func linkKeepingItemsDropsCheckedItems() {
+        let (store, repository, id) = storeWithList([item("fix login"), item("dark mode"), item("old", done: true)])
+        store.setTitle("Bugs", for: id)
+        store.link(id, repo: "acme/website", keep: true)
+        let note = store.note(id)
+        #expect(note?.githubRepo == "acme/website")
+        #expect(note?.items?.map(\.text) == ["fix login", "dark mode"])
+        #expect(note?.title == "Bugs")
+        #expect(note?.text == "Bugs\n[ ] fix login\n[ ] dark mode")
+        #expect(repository.stored.first?.githubRepo == "acme/website")
+    }
+
+    @Test func linkDiscardingItemsDropsEveryItem() {
+        let (store, repository, id) = storeWithList([item("fix login"), item("old", done: true)])
+        store.setTitle("Bugs", for: id)
+        store.link(id, repo: "acme/website", keep: false)
+        #expect(store.note(id)?.items?.isEmpty == true)
+        #expect(store.note(id)?.title == "Bugs")
+        #expect(repository.stored.first?.items?.isEmpty == true)
+    }
+
+    @Test func unlinkKeepsItems() {
+        let linked = ListItem(id: UUID(), text: "fix login", done: false, issueNumber: 12)
+        let (store, repository, id) = storeWithList([linked])
+        store.link(id, repo: "acme/website", keep: true)
+        store.unlink(id)
+        #expect(store.note(id)?.githubRepo == nil)
+        #expect(store.note(id)?.items == [linked])
+        #expect(repository.stored.first?.githubRepo == nil)
+    }
+
+    @Test func unlinkingAnUnlinkedListSavesNothing() {
+        let (store, repository, id) = storeWithList([item("milk")])
+        store.unlink(id)
+        #expect(repository.saves.isEmpty)
+    }
+}
+
+struct SetItemsTests {
+    @Test func setItemsSavesAndRefreshesPlainText() {
+        let (store, repository, id) = storeWithList([item("milk")])
+        store.setTitle("Bugs", for: id)
+        let items = [ListItem(id: UUID(), text: "fix login", done: false, issueNumber: 3)]
+        store.setItems(items, for: id)
+        #expect(store.note(id)?.items == items)
+        #expect(store.note(id)?.text == "Bugs\n[ ] fix login")
+        #expect(repository.stored.first?.items == items)
+    }
+
+    @Test func sameItemsSaveNothing() {
+        let items = [item("milk")]
+        let (store, repository, id) = storeWithList(items)
+        store.setItems(items, for: id)
+        #expect(repository.saves.isEmpty)
+    }
+}

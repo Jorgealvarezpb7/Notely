@@ -144,6 +144,29 @@ public final class NoteStore {
         }
     }
 
+    /// Replaces a list's items, as issue sync computes them.
+    public func setItems(_ items: [ListItem], for id: UUID) {
+        guard note(id)?.items != items else { return }
+        updateList(id) { $0.items = items }
+    }
+
+    /// Links a list to a GitHub repository, given as "owner/repo".
+    /// `keep` keeps the unchecked items, to be created as issues;
+    /// otherwise every item goes. Checked items always go. The title
+    /// never changes.
+    public func link(_ id: UUID, repo: String, keep: Bool) {
+        updateList(id) { note in
+            note.githubRepo = repo
+            note.items = keep ? (note.items ?? []).filter { !$0.done } : []
+        }
+    }
+
+    /// Unlinks a list. Its items stay, as local items.
+    public func unlink(_ id: UUID) {
+        guard note(id)?.githubRepo != nil else { return }
+        updateList(id) { $0.githubRepo = nil }
+    }
+
     private func save() {
         repository.save(notes)
     }

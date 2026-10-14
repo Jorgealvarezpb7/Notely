@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store: NoteStore
     private let appearance: TextAppearance
     private let notes: NoteWindowController
+    private let settings: SettingsWindowController
+    private let sync: SyncController
     private lazy var menu = MenuWindowController(
         store: store,
         appearance: appearance,
@@ -14,11 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onNewList: { [weak self] in self?.addFromMenu(list: true) }
     )
 
-    init(store: NoteStore, appearance: TextAppearance, linkPages: LinkPageStore) {
+    @MainActor
+    init(store: NoteStore, appearance: TextAppearance, account: GitHubAccount,
+         service: any IssueService, linkPages: LinkPageStore) {
         self.store = store
         self.appearance = appearance
-        notes = NoteWindowController(store: store, appearance: appearance, linkPages: linkPages)
+        sync = SyncController(store: store, account: account, service: service)
+        notes = NoteWindowController(store: store, appearance: appearance, account: account,
+                                     sync: sync, linkPages: linkPages)
+        settings = SettingsWindowController(store: store, appearance: appearance, account: account, sync: sync)
         super.init()
+        notes.openSettings = { [weak self] pane in self?.settings.show(pane: pane) }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -28,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Notes open after the menu, so they stack in front of it.
         menu.open()
         notes.openSavedWindows()
+        MainActor.assumeIsolated { sync.start() }
 
         NotificationCenter.default.addObserver(
             self,
@@ -53,6 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.bringToFront()
         notes.orderAllFront()
         return true
+    }
+
+    /// Opens Settings on its General pane: from the app menu (Cmd+,) and
+    /// from every note and list window's gear button.
+    @objc func openSettings(_ sender: Any?) {
+        settings.show(pane: .general)
     }
 
     private func addFromMenu(list: Bool) {
