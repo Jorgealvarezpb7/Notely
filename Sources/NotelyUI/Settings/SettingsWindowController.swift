@@ -66,25 +66,44 @@ final class SettingsWindowController: NSObject {
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.defaultSize),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         // The controller keeps the window, so red only hides it.
         window.isReleasedWhenClosed = false
         window.title = "Settings"
-        window.minSize = NSSize(width: 520, height: 320)
-        window.contentView = NSHostingView(rootView: SettingsView(
+        window.toolbarStyle = .unified
+        let content = NSHostingController(rootView: SettingsView(
             selection: selection,
             store: store,
             appearance: appearance,
             account: account,
             sync: sync
         ))
+        // SwiftUI fills the title bar: the pane's name as the window title,
+        // and the sidebar toggle in the toolbar.
+        content.sceneBridgingOptions = [.title, .toolbars]
+        // Only SwiftUI's minimum size reaches the window. Switching panes
+        // must not resize or move it.
+        content.sizingOptions = [.minSize]
+        window.contentViewController = content
+        window.setContentSize(Self.defaultSize)
         window.center()
         // Restores the frame the user last left, once there is one.
         window.setFrameAutosaveName(Self.autosaveName)
+        Self.growToMinimum(window)
         return window
+    }
+
+    /// A frame saved before the minimum size held can be smaller than it.
+    private static func growToMinimum(_ window: NSWindow) {
+        window.contentView?.layoutSubtreeIfNeeded()
+        let size = window.contentRect(forFrameRect: window.frame).size
+        let minimum = window.contentMinSize
+        guard size.width < minimum.width || size.height < minimum.height else { return }
+        window.setContentSize(NSSize(width: max(size.width, minimum.width),
+                                     height: max(size.height, minimum.height)))
     }
 }
 
@@ -96,6 +115,13 @@ struct SettingsView: View {
     let account: GitHubAccount
     let sync: SyncController
 
+    /// The narrowest pane that still fits every row on one line. General's
+    /// "Text size" row (label, A, 160-point slider, A, value) and
+    /// Integrations' "Account" row with "Connected as @login", "Reconnect…",
+    /// and "Disconnect" set it. Measure again when a pane grows.
+    private static let paneMinWidth: CGFloat = 420
+    private static let paneMinHeight: CGFloat = 320
+
     /// A click on empty sidebar space clears a `List` selection; keep the
     /// current pane instead.
     private var pane: Binding<SettingsPane?> {
@@ -106,19 +132,14 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView {
             List(SettingsPane.allCases, selection: pane) { pane in
                 Label(pane.title, systemImage: pane.symbolName)
                     .tag(pane)
             }
-            .listStyle(.sidebar)
-            .frame(width: 180)
-            Divider()
-            VStack(alignment: .leading, spacing: 0) {
-                Text(selection.pane.title)
-                    .font(.title2.bold())
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+        } detail: {
+            Group {
                 switch selection.pane {
                 case .general:
                     GeneralPane(appearance: appearance)
@@ -126,7 +147,10 @@ struct SettingsView: View {
                     IntegrationsPane(store: store, account: account, sync: sync)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(minWidth: Self.paneMinWidth, maxWidth: .infinity,
+                   minHeight: Self.paneMinHeight, maxHeight: .infinity,
+                   alignment: .topLeading)
+            .navigationTitle(selection.pane.title)
         }
     }
 }
