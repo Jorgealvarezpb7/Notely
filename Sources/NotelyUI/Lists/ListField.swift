@@ -162,9 +162,13 @@ struct ListField: NSViewRepresentable {
     var done = false
     var isTitle = false
     var canToggle = false
+    /// `false` for an item of an issue the user may not rename: the text
+    /// can still be selected and copied.
+    var isEditable = true
     let target: FocusTarget
     @ObservedObject var focus: ListFocus
     var onChange: (String) -> Void
+    var onBeginEditing: () -> Void = {}
     var onEndEditing: () -> Void = {}
     var onCommand: (ListCommand) -> Bool = { _ in false }
 
@@ -216,6 +220,9 @@ struct ListField: NSViewRepresentable {
     func updateNSView(_ field: ListTextField, context: Context) {
         context.coordinator.parent = self
         field.isTitle = isTitle
+        if field.isEditable != isEditable {
+            field.isEditable = isEditable
+        }
         if canToggle {
             let onCommand = self.onCommand
             field.onToggle = { _ = onCommand(.toggle) }
@@ -291,6 +298,10 @@ struct ListField: NSViewRepresentable {
             if let editor = notification.userInfo?["NSFieldEditor"] as? NSTextView,
                editor.hasMarkedText() { return }
             parent.onChange(field.stringValue)
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            parent.onBeginEditing()
         }
 
         /// Ending an edit puts the field editor's plain text back into

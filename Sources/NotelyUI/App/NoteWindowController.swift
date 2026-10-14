@@ -27,16 +27,24 @@ private extension NSView {
 final class NoteWindowController: NSObject, NSWindowDelegate {
     private let store: NoteStore
     private let appearance: TextAppearance
+    private let account: GitHubAccount
+    private let sync: SyncController
     private let linkPages: LinkPageStore
+    /// Opens the Settings window on a pane: General for the gear button,
+    /// Integrations for "Reconnect…".
+    var openSettings: (SettingsPane) -> Void = { _ in }
     private var windows: [UUID: NoteWindow] = [:]
     /// One scroller-style observation per note window, keyed by window.
     private var scrollerObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
     /// One list-row field editor per list window, keyed by window.
     private var fieldEditors: [ObjectIdentifier: LinkFieldEditor] = [:]
 
-    init(store: NoteStore, appearance: TextAppearance, linkPages: LinkPageStore) {
+    init(store: NoteStore, appearance: TextAppearance, account: GitHubAccount,
+         sync: SyncController, linkPages: LinkPageStore) {
         self.store = store
         self.appearance = appearance
+        self.account = account
+        self.sync = sync
         self.linkPages = linkPages
         super.init()
     }
@@ -134,10 +142,13 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
         let hostingView = NSHostingView(rootView: WindowContent(
             store: store,
             appearance: appearance,
+            account: account,
+            sync: sync,
             linkPages: linkPages,
             id: note.id,
             onClose: { [weak self] in self?.closeNote(note.id) },
-            onDelete: { [weak self] in self?.confirmDelete(note.id) }
+            onDelete: { [weak self] in self?.confirmDelete(note.id) },
+            onSettings: { [weak self] pane in self?.openSettings(pane) }
         ))
         // The window alone owns its size; SwiftUI's preferred size must
         // not pin it.

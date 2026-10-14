@@ -7,15 +7,15 @@ How to verify:
 
 ## 1. Data model and link rules (NotelyCore)
 
-- [ ] 1.1 Add `githubRepo: String?` to `Note` and `issueNumber: Int?` to `ListItem`, both optional with `nil` defaults in the initializers (design.md "Data model").
+- [x] 1.1 Add `githubRepo: String?` to `Note` and `issueNumber: Int?` to `ListItem`, both optional with `nil` defaults in the initializers (design.md "Data model").
   - Add a `ModelTests` case: a list saved without the new fields decodes with both fields `nil`.
   - Verify `just test` passes.
-- [ ] 1.2 Add `NoteStore.link(_:repo:keep:)` and `NoteStore.unlink(_:)` (design.md "Data model").
+- [x] 1.2 Add `NoteStore.link(_:repo:keep:)` and `NoteStore.unlink(_:)` (design.md "Data model").
   - `keep: true` keeps the unchecked items and drops the checked ones. `keep: false` drops every item. The title never changes.
   - `unlink` clears `githubRepo` and keeps items and `issueNumber`.
   - Add `NoteStoreTests` for each rule, including that the change is saved through the repository and that `text` (the plain-text copy) is refreshed.
   - Verify `just test` passes (github-integration "Link a list", "Unlink a list").
-- [ ] 1.3 Add a function that checks repository input against `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$` after trimming spaces (design.md "Repository picker validation").
+- [x] 1.3 Add a function that checks repository input against `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$` after trimming spaces (design.md "Repository picker validation").
   - Add tests: "acme/website" is valid; "acme", "acme/web site", "a/b/c", and "/x" are rejected.
   - Verify `just test` passes.
 - [ ] 1.4 Add the `TokenStore` protocol (`read`, `save`, `delete`) and an in-memory implementation for tests (design.md "Account state").
@@ -23,11 +23,11 @@ How to verify:
 
 ## 2. Keychain token store (NotelyGitHub)
 
-- [ ] 2.1 Add the macOS-only `NotelyGitHub` target to `Package.swift`, inside the `#if os(macOS)` block, depending on `NotelyCore`. Make `NotelyUI` and `Notely` depend on it.
+- [ ] 2.1 Add the macOS-only `NotelyGitHub` target to `Package.swift`, inside the `#if os(macOS)` block, depending on `NotelyCore`. Make `Notely` depend on it. `NotelyUI` needs only `NotelyCore`, where `GitHubAccount` lives.
   - Verify `swift build` succeeds on macOS and `just test-linux` still passes.
 - [ ] 2.2 Implement `KeychainTokenStore: TokenStore` with `SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate`, and `SecItemDelete` (generic password, service `com.notely.github`, account `token`). Trim the token before saving, and never log it.
   - Verify by hand on macOS: save shows the item in Keychain Access, relaunch reads it back, delete removes it (github-integration "Token kept in the Keychain").
-- [ ] 2.3 Add `GitHubAccount`, an observable object with `isConnected`, `connect(token:)`, and `disconnect()`, backed by a `TokenStore`.
+- [ ] 2.3 Add `GitHubAccount` to `NotelyCore`: an observable object with `isConnected`, `connect(token:)`, and `disconnect()`, backed by a `TokenStore`, with tests using the in-memory store.
   - Create it in `main.swift` and pass it through `NotelyApp.run` and `AppDelegate`, next to `TextAppearance`.
   - Verify `swift build` succeeds.
 

@@ -54,13 +54,15 @@ list:  [GH][refresh]    ...        [gear][tint]
 
 The existing 190 by 120 point minimum size stays. The note bar loses one button, and the list bar has at most four buttons.
 
+SF Symbols has no GitHub mark, so the GitHub button uses `arrow.triangle.branch`. The refresh button uses `arrow.clockwise`, and the gear uses `gearshape`.
+
 ### Account state: `GitHubAccount` observable
 `GitHubAccount` is an `ObservableObject` that publishes `isConnected`. It is injected wherever `TextAppearance` is: `BottomBar`, the Settings panes, and the window controllers. When the account connects or disconnects, every open list's bar updates at once.
 
-`GitHubAccount` reads and writes the token through a `TokenStore` protocol:
-- The protocol lives in `NotelyCore`, so tests can use an in-memory fake.
-- The Keychain implementation lives in a new macOS-only target, `NotelyGitHub`. It uses `SecItemAdd`, `SecItemCopyMatching`, and `SecItemDelete` with `kSecClassGenericPassword`, service `com.notely.github`, and account `token`.
-- The follow-up change puts the API client in the same target.
+`GitHubAccount` and the `TokenStore` protocol it reads and writes the token through both live in `NotelyCore`, so tests can cover them on Linux with an in-memory fake. `NotelyUI` therefore needs only `NotelyCore`.
+- The Keychain implementation, `KeychainTokenStore`, lives in a new macOS-only target, `NotelyGitHub`. It uses `SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate`, and `SecItemDelete` with `kSecClassGenericPassword`, service `com.notely.github`, and account `token`.
+- Only the `Notely` executable depends on `NotelyGitHub`. It builds the account in `main.swift`.
+- The follow-up change puts the API client in `NotelyGitHub` too.
 
 Rejected alternatives:
 - *Keychain code in `NotelyUI`.* Rejected because the sync code needs the token too, so both belong in one GitHub module.

@@ -8,16 +8,21 @@ import SwiftUI
 struct WindowContent: View {
     let store: NoteStore
     let appearance: TextAppearance
+    let account: GitHubAccount
+    let sync: SyncController
     let linkPages: LinkPageStore
     let id: UUID
     var onClose: () -> Void
     var onDelete: () -> Void
+    var onSettings: (SettingsPane) -> Void
 
     var body: some View {
         if store.note(id)?.isList == true {
-            ListView(store: store, appearance: appearance, linkPages: linkPages, id: id, onClose: onClose, onDelete: onDelete)
+            ListView(store: store, appearance: appearance, account: account, sync: sync, linkPages: linkPages, id: id,
+                     onClose: onClose, onDelete: onDelete, onSettings: onSettings)
         } else {
-            NoteView(store: store, appearance: appearance, linkPages: linkPages, id: id, onClose: onClose, onDelete: onDelete)
+            NoteView(store: store, appearance: appearance, account: account, sync: sync, linkPages: linkPages, id: id,
+                     onClose: onClose, onDelete: onDelete, onSettings: onSettings)
         }
     }
 }
@@ -25,10 +30,13 @@ struct WindowContent: View {
 struct NoteView: View {
     let store: NoteStore
     let appearance: TextAppearance
+    let account: GitHubAccount
+    let sync: SyncController
     let linkPages: LinkPageStore
     let id: UUID
     var onClose: () -> Void
     var onDelete: () -> Void
+    var onSettings: (SettingsPane) -> Void
     @StateObject private var editorState = NoteEditorState()
 
     var body: some View {
@@ -44,7 +52,7 @@ struct NoteView: View {
             NoteStrip(onClose: onClose, onDelete: onDelete)
         }
         .overlay(alignment: .bottom) {
-            BottomBar(store: store, appearance: appearance, id: id, editorState: editorState)
+            BottomBar(store: store, account: account, sync: sync, id: id, editorState: editorState, onSettings: onSettings)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(NoteBackground(tint: store.note(id)?.tint))
