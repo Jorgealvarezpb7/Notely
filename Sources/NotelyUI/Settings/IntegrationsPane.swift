@@ -44,7 +44,10 @@ struct IntegrationsPane: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(linkedLists) { note in
+                        // Long titles and repository names truncate; they
+                        // must not widen the pane.
                         LabeledContent(listTitle(note.title), value: note.githubRepo ?? "")
+                            .lineLimit(1)
                     }
                 }
             }
