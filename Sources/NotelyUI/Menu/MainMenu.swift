@@ -39,16 +39,29 @@ func makeMainMenu() -> NSMenu {
     formatMenu.addItem(withTitle: "Italic", action: #selector(NoteTextView.toggleNoteItalic(_:)), keyEquivalent: "i")
     formatMenu.addItem(withTitle: "Underline", action: #selector(NoteTextView.toggleNoteUnderline(_:)), keyEquivalent: "u")
 
+    // No target: the key window answers these, a list window's
+    // `NoteWindow` only. Elsewhere they are disabled.
+    let gitHubMenu = NSMenu(title: "GitHub")
+    gitHubMenu.addItem(withTitle: "Description", action: #selector(NoteWindow.showIssueDescription(_:)),
+                       keyEquivalent: "d")
+    gitHubMenu.addItem(withTitle: "Refresh Issues", action: #selector(NoteWindow.refreshIssues(_:)),
+                       keyEquivalent: "r")
+    gitHubMenu.addItem(withTitle: "Link to Repository…", action: #selector(NoteWindow.linkToRepository(_:)),
+                       keyEquivalent: "l")
+
     let appItem = NSMenuItem()
     appItem.submenu = appMenu
     let editItem = NSMenuItem()
     editItem.submenu = editMenu
     let formatItem = NSMenuItem()
     formatItem.submenu = formatMenu
+    let gitHubItem = NSMenuItem()
+    gitHubItem.submenu = gitHubMenu
 
     let mainMenu = NSMenu()
     mainMenu.addItem(appItem)
     mainMenu.addItem(editItem)
     mainMenu.addItem(formatItem)
+    mainMenu.addItem(gitHubItem)
     return mainMenu
 }

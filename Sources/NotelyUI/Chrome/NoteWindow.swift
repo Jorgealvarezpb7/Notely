@@ -5,6 +5,38 @@ import SwiftUI
 /// transparent and hidden, so the note keeps its own look while getting
 /// native resizing, corners, and shadow.
 final class NoteWindow: NSWindow {
+    /// Set by a list window's view. `nil` for note windows, so the GitHub
+    /// menu's items are disabled there.
+    weak var listCommands: ListCommands?
+
+    @objc func showIssueDescription(_ sender: Any?) {
+        guard listCommands?.canShowDescription() == true else { return }
+        listCommands?.showDescription()
+    }
+
+    @objc func refreshIssues(_ sender: Any?) {
+        guard listCommands?.canRefresh() == true else { return }
+        listCommands?.refresh()
+    }
+
+    @objc func linkToRepository(_ sender: Any?) {
+        guard listCommands?.canLink() == true else { return }
+        listCommands?.link?()
+    }
+
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(showIssueDescription(_:)):
+            return listCommands?.canShowDescription() == true
+        case #selector(refreshIssues(_:)):
+            return listCommands?.canRefresh() == true
+        case #selector(linkToRepository(_:)):
+            return listCommands?.canLink() == true && listCommands?.link != nil
+        default:
+            return super.validateMenuItem(menuItem)
+        }
+    }
+
     /// Esc sends `cancelOperation(_:)` up the responder chain from a
     /// focused NSTextView. Resign first responder to end editing while
     /// keeping the note text.

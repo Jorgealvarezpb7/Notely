@@ -13,6 +13,9 @@ struct BottomBar: View {
     let sync: SyncController
     let id: UUID
     var editorState: NoteEditorState? = nil
+    /// A list window's menu-bar commands; the bar provides "Link to
+    /// Repository…".
+    var commands: ListCommands? = nil
     var onSettings: (SettingsPane) -> Void
     @StateObject private var tintControls = TintControls()
     @StateObject private var gitHubControls = GitHubControls()
@@ -53,48 +56,112 @@ struct BottomBar: View {
         .background(barFill)
     }
 
-    /// The GitHub button, with a badge while changes wait or the token no
-    /// longer works, and the refresh button for a linked list, which spins
-    /// while the list syncs.
+    /// The GitHub button, and for a linked list the refresh button, which
+    /// spins while the list syncs, followed by the last sync's result.
     private func gitHubButtons(linked: Bool) -> some View {
         HStack(spacing: 16) {
-            StripButton(symbolName: "arrow.triangle.branch", accessibilityLabel: "GitHub") { button in
-                gitHubControls.store = store
-                gitHubControls.account = account
-                gitHubControls.sync = sync
-                gitHubControls.id = id
-                gitHubControls.onReconnect = { onSettings(.integrations) }
+            StripButton(symbolName: "arrow.triangle.branch", accessibilityLabel: "GitHub",
+                        onMake: { button in
+                            configureGitHubControls()
+                            gitHubControls.anchor(button)
+                            let controls = gitHubControls
+                            commands?.link = { [weak controls] in controls?.showFromShortcut() }
+                        }) { button in
+                configureGitHubControls()
                 gitHubControls.showMenu(from: button)
             }
             .frame(width: StripButton.referenceSize.width,
                    height: StripButton.referenceSize.height)
-            .overlay(alignment: .topTrailing) {
-                if linked && (account.tokenRejected || sync.pendingCount(id) > 0) {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 6, height: 6)
-                        .offset(x: 2, y: -1)
-                        .allowsHitTesting(false)
-                        .accessibilityLabel("Changes not sent")
-                }
-            }
             if linked {
-                if sync.states[id]?.isRunning == true {
-                    ProgressView()
-                        .controlSize(.small)
-                        .scaleEffect(0.7)
-                        .frame(width: StripButton.referenceSize.width,
-                               height: StripButton.referenceSize.height)
-                        .accessibilityLabel("Refreshing Issues")
-                } else {
-                    StripButton(symbolName: "arrow.clockwise", accessibilityLabel: "Refresh Issues") { _ in
-                        sync.refresh(id)
-                    }
-                    .frame(width: StripButton.referenceSize.width,
-                           height: StripButton.referenceSize.height)
+                HStack(spacing: 4) {
+                    refreshButton
+                    SyncResultIcon(sync: sync, id: id)
                 }
             }
         }
+    }
+
+    private func configureGitHubControls() {
+        gitHubControls.store = store
+        gitHubControls.account = account
+        gitHubControls.sync = sync
+        gitHubControls.id = id
+        gitHubControls.onReconnect = { onSettings(.integrations) }
+    }
+
+    /// The refresh button, or a spinner while the list syncs.
+    @ViewBuilder
+    private var refreshButton: some View {
+        if sync.states[id]?.isRunning == true {
+            ProgressView()
+                .controlSize(.small)
+                .scaleEffect(0.7)
+                .frame(width: StripButton.referenceSize.width,
+                       height: StripButton.referenceSize.height)
+                .accessibilityLabel("Refreshing Issues")
+        } else {
+            StripButton(symbolName: "arrow.clockwise", accessibilityLabel: "Refresh Issues") { _ in
+                sync.refresh(id)
+            }
+            .frame(width: StripButton.referenceSize.width,
+                   height: StripButton.referenceSize.height)
+        }
+    }
+}
+
+/// The check mark or x beside a linked list's refresh button
+/// (`sync-status`). Hidden while the list syncs. Visibility is read again
+/// every 5 seconds, so a result fades within 5 seconds of its minute.
+struct SyncResultIcon: View {
+    let sync: SyncController
+    let id: UUID
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            let state = sync.states[id]
+            let visible = state?.isRunning != true
+                && SyncStatus.visible(result: state?.result, at: state?.resultAt, now: context.date,
+                                      waiting: sync.waitingCount(id))
+            ZStack {
+                if visible, let result = state?.result {
+                    icon(result)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.3), value: visible)
+        }
+    }
+
+    @ViewBuilder
+    private func icon(_ result: SyncResult) -> some View {
+        switch result {
+        case .ok:
+            Image(systemName: "checkmark")
+                .foregroundStyle(Color.green)
+                .accessibilityLabel("Synced with GitHub")
+        case .failed(let reason):
+            FailedIcon(reason: reason)
+                .fixedSize()
+                .accessibilityLabel("Not synced with GitHub: \(reason)")
+        }
+    }
+}
+
+/// The x, with the reason as an AppKit tooltip. SwiftUI's `.help` showed
+/// nothing here, inside the timeline in the bar's overlay.
+private struct FailedIcon: NSViewRepresentable {
+    let reason: String
+
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)
+        view.contentTintColor = .systemRed
+        view.toolTip = reason
+        return view
+    }
+
+    func updateNSView(_ nsView: NSImageView, context: Context) {
+        nsView.toolTip = reason
     }
 }
 

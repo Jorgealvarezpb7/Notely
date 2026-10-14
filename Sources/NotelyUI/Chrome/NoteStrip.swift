@@ -27,6 +27,9 @@ struct StripButton: NSViewRepresentable {
     /// Set for a color swatch (the tint button): the symbol shows in this
     /// color instead of the bar's icon color.
     var color: NSColor? = nil
+    /// Called once with the button when it is made, for controls that
+    /// open a menu or popover at it without a click (a shortcut).
+    var onMake: ((NSButton) -> Void)? = nil
     let action: (NSButton) -> Void
 
     func makeNSView(context: Context) -> NSButton {
@@ -39,6 +42,7 @@ struct StripButton: NSViewRepresentable {
         button.setAccessibilityLabel(accessibilityLabel)
         button.target = context.coordinator
         button.action = #selector(Coordinator.fire(_:))
+        onMake?(button)
         return button
     }
 

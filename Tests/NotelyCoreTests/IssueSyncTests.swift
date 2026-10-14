@@ -84,7 +84,7 @@ struct ShownTests {
     @Test func answers() {
         var closed = issue(1, "a")
         closed.closed = true
-        #expect(IssueSync.answer(for: closed, login: "me") == .closed(title: "a"))
+        #expect(IssueSync.answer(for: closed, login: "me") == .closed(title: "a", body: ""))
         #expect(IssueSync.answer(for: issue(2, "b"), login: "me") == .shown)
         #expect(IssueSync.answer(for: issue(3, "c", assignees: ["ana"]), login: "me") == .hidden)
     }

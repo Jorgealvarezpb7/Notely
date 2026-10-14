@@ -4,6 +4,9 @@ import Foundation
 public struct RemoteIssue: Equatable {
     public var number: Int
     public var title: String
+    /// The description, with line breaks normalized
+    /// (`IssueSync.normalizedBody`). Empty when the issue has none.
+    public var body: String
     public var closed: Bool
     /// Login of the user who opened the issue.
     public var author: String
@@ -11,10 +14,11 @@ public struct RemoteIssue: Equatable {
     public var assignees: [String]
     public var isPullRequest: Bool
 
-    public init(number: Int, title: String, closed: Bool = false, author: String,
+    public init(number: Int, title: String, body: String = "", closed: Bool = false, author: String,
                 assignees: [String] = [], isPullRequest: Bool = false) {
         self.number = number
         self.title = title
+        self.body = IssueSync.normalizedBody(body)
         self.closed = closed
         self.author = author
         self.assignees = assignees
@@ -93,7 +97,8 @@ public protocol IssueService: AnyObject {
     /// "none".
     func openIssues(_ repo: String, assignee: String) async throws -> [RemoteIssue]
     func issue(_ repo: String, number: Int) async throws -> RemoteIssue
-    func create(_ repo: String, title: String, assignees: [String]) async throws -> RemoteIssue
-    /// Changes the title, the state, or both; `nil` leaves it as it is.
-    func update(_ repo: String, number: Int, title: String?, closed: Bool?) async throws -> RemoteIssue
+    func create(_ repo: String, title: String, body: String, assignees: [String]) async throws -> RemoteIssue
+    /// Changes the title, the description, the state, or any of them;
+    /// `nil` leaves it as it is.
+    func update(_ repo: String, number: Int, title: String?, body: String?, closed: Bool?) async throws -> RemoteIssue
 }

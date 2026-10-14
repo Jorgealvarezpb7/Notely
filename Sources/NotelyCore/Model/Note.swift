@@ -9,6 +9,10 @@ import Foundation
 /// `remoteTitle`, `remoteClosed`, and `issueAuthor` are the issue as last
 /// seen on GitHub. Where `text` or `done` differ from them, a change is
 /// waiting to be sent (see `IssueSync.pendingChanges`).
+///
+/// `body` is the issue's description, in Markdown, and `remoteBody` the
+/// description as last seen on GitHub. `heldBody` is GitHub's description
+/// while a conflicting edit is held, `nil` otherwise.
 public struct ListItem: Codable, Identifiable, Equatable {
     public let id: UUID
     public var text: String
@@ -17,9 +21,13 @@ public struct ListItem: Codable, Identifiable, Equatable {
     public var remoteTitle: String?
     public var remoteClosed: Bool?
     public var issueAuthor: String?
+    public var body: String?
+    public var remoteBody: String?
+    public var heldBody: String?
 
     public init(id: UUID, text: String, done: Bool, issueNumber: Int? = nil,
-                remoteTitle: String? = nil, remoteClosed: Bool? = nil, issueAuthor: String? = nil) {
+                remoteTitle: String? = nil, remoteClosed: Bool? = nil, issueAuthor: String? = nil,
+                body: String? = nil, remoteBody: String? = nil, heldBody: String? = nil) {
         self.id = id
         self.text = text
         self.done = done
@@ -27,6 +35,9 @@ public struct ListItem: Codable, Identifiable, Equatable {
         self.remoteTitle = remoteTitle
         self.remoteClosed = remoteClosed
         self.issueAuthor = issueAuthor
+        self.body = body
+        self.remoteBody = remoteBody
+        self.heldBody = heldBody
     }
 }
 

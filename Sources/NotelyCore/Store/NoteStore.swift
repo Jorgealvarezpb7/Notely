@@ -124,6 +124,32 @@ public final class NoteStore {
         }
     }
 
+    /// Saves an item's description as typed. An empty description is
+    /// kept as empty, not removed: it may be a change to send.
+    public func setItemBody(_ body: String, item itemID: UUID, for id: UUID) {
+        updateList(id) { note in
+            guard let index = note.items?.firstIndex(where: { $0.id == itemID }) else { return }
+            note.items?[index].body = body
+        }
+    }
+
+    /// Ends a held description conflict. `keepMine` takes GitHub's
+    /// description as the one last seen, so the user's description is a
+    /// waiting change again and is sent (and checked again) at the next
+    /// push. Otherwise the item takes GitHub's description and nothing
+    /// is left to send.
+    public func resolveConflict(item itemID: UUID, for id: UUID, keepMine: Bool) {
+        updateList(id) { note in
+            guard let index = note.items?.firstIndex(where: { $0.id == itemID }),
+                  let held = note.items?[index].heldBody else { return }
+            if !keepMine {
+                note.items?[index].body = held
+            }
+            note.items?[index].remoteBody = held
+            note.items?[index].heldBody = nil
+        }
+    }
+
     public func removeItem(_ itemID: UUID, for id: UUID) {
         guard note(id)?.items?.contains(where: { $0.id == itemID }) == true else { return }
         updateList(id) { note in note.items?.removeAll { $0.id == itemID } }

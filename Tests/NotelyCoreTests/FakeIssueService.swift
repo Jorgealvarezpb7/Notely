@@ -9,8 +9,8 @@ final class FakeIssueService: IssueService {
     var repos: [String] = []
     var access: [String: RepoAccess] = [:]
     var issues: [Int: RemoteIssue] = [:]
-    private(set) var created: [(title: String, assignees: [String])] = []
-    private(set) var updates: [(number: Int, title: String?, closed: Bool?)] = []
+    private(set) var created: [(title: String, body: String, assignees: [String])] = []
+    private(set) var updates: [(number: Int, title: String?, body: String?, closed: Bool?)] = []
 
     func currentUser(token: String) async throws -> String {
         guard let login = logins[token] else { throw failure }
@@ -37,17 +37,19 @@ final class FakeIssueService: IssueService {
         return issue
     }
 
-    func create(_ repo: String, title: String, assignees: [String]) async throws -> RemoteIssue {
-        created.append((title, assignees))
-        let issue = RemoteIssue(number: (issues.keys.max() ?? 0) + 1, title: title, author: "me", assignees: assignees)
+    func create(_ repo: String, title: String, body: String, assignees: [String]) async throws -> RemoteIssue {
+        created.append((title, body, assignees))
+        let issue = RemoteIssue(number: (issues.keys.max() ?? 0) + 1, title: title, body: body, author: "me",
+                                assignees: assignees)
         issues[issue.number] = issue
         return issue
     }
 
-    func update(_ repo: String, number: Int, title: String?, closed: Bool?) async throws -> RemoteIssue {
+    func update(_ repo: String, number: Int, title: String?, body: String?, closed: Bool?) async throws -> RemoteIssue {
         guard var issue = issues[number] else { throw failure }
-        updates.append((number, title, closed))
+        updates.append((number, title, body, closed))
         if let title { issue.title = title }
+        if let body { issue.body = IssueSync.normalizedBody(body) }
         if let closed { issue.closed = closed }
         issues[number] = issue
         return issue

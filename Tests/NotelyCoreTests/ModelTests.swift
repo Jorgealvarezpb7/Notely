@@ -119,4 +119,14 @@ struct RemoteFieldTests {
         #expect(item.remoteClosed == nil)
         #expect(item.issueAuthor == nil)
     }
+
+    /// An item saved by the version without descriptions.
+    @Test func itemWithoutBodyFieldsDecodes() throws {
+        let json = #"{"id":"7F9619FF-8B86-D011-B42D-00CF4FC964FF","text":"fix login","done":true,"issueNumber":4,"remoteTitle":"fix login","remoteClosed":true,"issueAuthor":"me"}"#
+        let item = try JSONDecoder().decode(ListItem.self, from: Data(json.utf8))
+        #expect(item.issueNumber == 4)
+        #expect(item.body == nil)
+        #expect(item.remoteBody == nil)
+        #expect(item.heldBody == nil)
+    }
 }

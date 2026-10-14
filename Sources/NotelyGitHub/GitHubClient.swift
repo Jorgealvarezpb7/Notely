@@ -13,7 +13,7 @@ extension Logger {
 /// Logging: one line per request with the method, the path with the
 /// repository hidden as a private value, the status, the time taken, and
 /// the remaining rate limit. The token, the headers, and the bodies are
-/// never logged.
+/// never logged, and neither are issue descriptions.
 public final class GitHubClient: IssueService {
     private static let api = "https://api.github.com"
     /// Pages followed at most for one list request.
@@ -75,15 +75,19 @@ public final class GitHubClient: IssueService {
         return try decode(IssueJSON.self, data).remote
     }
 
-    public func create(_ repo: String, title: String, assignees: [String]) async throws -> RemoteIssue {
-        let body: [String: Any] = ["title": title, "assignees": assignees]
+    public func create(_ repo: String, title: String, body description: String,
+                       assignees: [String]) async throws -> RemoteIssue {
+        var body: [String: Any] = ["title": title, "assignees": assignees]
+        if !description.isEmpty { body["body"] = description }
         let (data, _) = try await send("POST", Self.url("/repos/\(repo)/issues"), repo: repo, body: body)
         return try decode(IssueJSON.self, data).remote
     }
 
-    public func update(_ repo: String, number: Int, title: String?, closed: Bool?) async throws -> RemoteIssue {
+    public func update(_ repo: String, number: Int, title: String?, body description: String?,
+                       closed: Bool?) async throws -> RemoteIssue {
         var body: [String: Any] = [:]
         if let title { body["title"] = title }
+        if let description { body["body"] = description }
         if let closed { body["state"] = closed ? "closed" : "open" }
         let (data, _) = try await send("PATCH", Self.url("/repos/\(repo)/issues/\(number)"), repo: repo, body: body)
         return try decode(IssueJSON.self, data).remote
@@ -256,13 +260,15 @@ private struct IssueJSON: Decodable {
 
     let number: Int
     let title: String
+    /// `null` when the issue has no description.
+    let body: String?
     let state: String
     let user: UserJSON
     let assignees: [UserJSON]?
     let pull_request: PullRequest?
 
     var remote: RemoteIssue {
-        RemoteIssue(number: number, title: title, closed: state == "closed", author: user.login,
+        RemoteIssue(number: number, title: title, body: body ?? "", closed: state == "closed", author: user.login,
                     assignees: (assignees ?? []).map(\.login), isPullRequest: pull_request != nil)
     }
 }

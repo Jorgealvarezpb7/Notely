@@ -77,6 +77,8 @@ struct ListView: View {
     var onDelete: () -> Void
     var onSettings: (SettingsPane) -> Void
     @StateObject private var focus = ListFocus()
+    @StateObject private var descriptions = DescriptionControls()
+    @StateObject private var commands = ListCommands()
 
     private var items: [ListItem] { store.note(id)?.items ?? [] }
 
@@ -134,8 +136,11 @@ struct ListView: View {
             NoteStrip(onClose: onClose, onDelete: onDelete)
         }
         .overlay(alignment: .bottom) {
-            BottomBar(store: store, account: account, sync: sync, id: id, onSettings: onSettings)
+            BottomBar(store: store, account: account, sync: sync, id: id, commands: commands,
+                      onSettings: onSettings)
         }
+        .background(ListCommandsInstaller(commands: commands))
+        .onAppear(perform: setUpCommands)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(NoteBackground(tint: store.note(id)?.tint))
         // Fill the transparent title bar too, as in note windows.
@@ -164,6 +169,16 @@ struct ListView: View {
                               onEndEditing: { endEditing(item.id) },
                               onCommand: { handle($0, at: .item(item.id)) })
                         .padding(.top, 3)
+                    if isLinked {
+                        descriptionIcon(item)
+                    }
+                }
+                .onHover { inside in
+                    if inside {
+                        descriptions.hoveredItem = item.id
+                    } else if descriptions.hoveredItem == item.id {
+                        descriptions.hoveredItem = nil
+                    }
                 }
             }
         case .newItem:
@@ -183,6 +198,39 @@ struct ListView: View {
                     .padding(.top, 3)
             }
         }
+    }
+
+    /// The description icon at a linked row's trailing edge: shown when
+    /// the item has a description, while the pointer is over the row, or
+    /// while its popover is open. Laid out on every linked row, so Cmd+D
+    /// has an anchor even when it is hidden.
+    private func descriptionIcon(_ item: ListItem) -> some View {
+        let shown = !IssueSync.normalizedBody(item.body).isEmpty || item.heldBody != nil
+            || descriptions.hoveredItem == item.id || descriptions.openItem == item.id
+        return DescriptionButton(controls: descriptions, item: item.id)
+            .frame(width: 20, height: 20)
+            .padding(.top, 2)
+            .opacity(shown ? 1 : 0)
+            .allowsHitTesting(shown)
+    }
+
+    /// What the menu bar's GitHub menu does in this window.
+    private func setUpCommands() {
+        descriptions.store = store
+        descriptions.sync = sync
+        descriptions.id = id
+        // The item being edited, or else the item under the pointer.
+        let target = { [sync, id, descriptions] in sync.focused[id] ?? descriptions.hoveredItem }
+        commands.canShowDescription = { [store, id, descriptions] in
+            store.note(id)?.githubRepo != nil && (target() != nil || descriptions.openItem != nil)
+        }
+        commands.showDescription = { [descriptions] in descriptions.toggleFromShortcut(target()) }
+        commands.canRefresh = { [store, sync, account, id] in
+            store.note(id)?.githubRepo != nil && account.isConnected && !account.tokenRejected
+                && sync.states[id]?.isRunning != true
+        }
+        commands.refresh = { [sync, id] in sync.refresh(id) }
+        commands.canLink = { [account] in account.isConnected }
     }
 
     /// Checks or unchecks an item. On a linked list, only an item the user

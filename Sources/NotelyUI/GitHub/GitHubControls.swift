@@ -18,6 +18,29 @@ final class GitHubControls: NSObject, ObservableObject, NSPopoverDelegate {
     private weak var button: NSButton?
     private var popover: NSPopover?
 
+    /// Keeps the GitHub button, so "Link to Repository…" (Cmd+L) can open
+    /// the picker at it before the button was ever clicked.
+    func anchor(_ button: NSButton) {
+        self.button = button
+    }
+
+    /// Cmd+L, from the GitHub menu in the menu bar: the picker for an
+    /// unlinked list, and the GitHub button's menu ("Open on GitHub",
+    /// "Unlink") for a linked one.
+    /// Pressed again while the picker is open, it closes the picker.
+    func showFromShortcut() {
+        if let popover {
+            popover.performClose(nil)
+            return
+        }
+        guard let button, let store, let id else { return }
+        if store.note(id)?.githubRepo != nil {
+            showMenu(from: button)
+        } else {
+            showPicker(nil)
+        }
+    }
+
     func showMenu(from button: NSButton) {
         guard let store, let id, let note = store.note(id) else { return }
         self.button = button
@@ -36,7 +59,10 @@ final class GitHubControls: NSObject, ObservableObject, NSPopoverDelegate {
             menu.addItem(current)
             let pending = sync?.pendingCount(id) ?? 0
             if pending > 0 {
-                addInfo(pending == 1 ? "1 change not sent yet" : "\(pending) changes not sent yet", to: menu)
+                addInfo(SyncController.pendingText(pending), to: menu)
+            }
+            if (sync?.heldCount(id) ?? 0) > 0 {
+                addInfo(SyncController.heldReason, to: menu)
             }
             if let message = sync?.states[id]?.message {
                 addInfo(message, to: menu)
@@ -47,6 +73,14 @@ final class GitHubControls: NSObject, ObservableObject, NSPopoverDelegate {
         } else {
             addItem("Link to Repository…", #selector(showPicker(_:)), to: menu)
         }
+        // Cmd+L again closes the menu: a menu being shown takes the keys,
+        // so the menu bar's item never sees it. Choosing any item closes
+        // the menu, so this one does nothing else.
+        let close = NSMenuItem(title: "Close", action: #selector(closeMenu(_:)), keyEquivalent: "l")
+        close.target = self
+        close.isHidden = true
+        close.allowsKeyEquivalentWhenHidden = true
+        menu.addItem(close)
         // Below the button, as the tint menu.
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
@@ -63,6 +97,8 @@ final class GitHubControls: NSObject, ObservableObject, NSPopoverDelegate {
         menu.addItem(item)
     }
 
+    @objc private func closeMenu(_ sender: NSMenuItem) {}
+
     @objc private func reconnect(_ sender: NSMenuItem) {
         onReconnect()
     }
@@ -78,7 +114,7 @@ final class GitHubControls: NSObject, ObservableObject, NSPopoverDelegate {
         store?.unlink(id)
     }
 
-    @objc private func showPicker(_ sender: NSMenuItem) {
+    @objc private func showPicker(_ sender: NSMenuItem?) {
         guard let button, let sync else { return }
         let controller = NSHostingController(rootView: RepositoryPicker(
             service: sync.service,
