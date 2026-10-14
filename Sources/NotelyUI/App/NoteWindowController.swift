@@ -21,6 +21,16 @@ private extension NSView {
     }
 }
 
+/// The Settings switch "Animate closing and opening notes". Saved under
+/// its own key, apart from `notes`; on when nothing is saved.
+enum NoteAnimation {
+    static let key = "animateNotes"
+
+    static var isOn: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+}
+
 /// Owns every note and list window: opens and closes them, saves their
 /// frames, keeps their size limits, and gives list rows their field
 /// editor.
@@ -38,6 +48,10 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
     private var scrollerObservations: [ObjectIdentifier: NSKeyValueObservation] = [:]
     /// One list-row field editor per list window, keyed by window.
     private var fieldEditors: [ObjectIdentifier: LinkFieldEditor] = [:]
+    /// One-shot observers of the minimize and restore animations, by key.
+    private var observers: [UUID: NSObjectProtocol] = [:]
+    /// Notes coming out of the Dock; a second click on the row waits.
+    private var reopening: Set<UUID> = []
 
     init(store: NoteStore, appearance: TextAppearance, account: GitHubAccount,
          sync: SyncController, linkPages: LinkPageStore) {
@@ -104,8 +118,10 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// Opens a note's window at its saved frame. With `show` false the
+    /// window is built but not ordered in, for the caller to show.
     @discardableResult
-    private func openWindow(for note: Note) -> NoteWindow {
+    private func openWindow(for note: Note, show: Bool = true) -> NoteWindow {
         let size = savedSize(note.size)
         let frame: NSRect
         if let restored = restoredFrame(saved: note.origin, size: size,
@@ -123,7 +139,10 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
 
         let window = NoteWindow(
             contentRect: frame,
-            styleMask: [.titled, .resizable, .fullSizeContentView],
+            // Miniaturizable for the system minimize and restore
+            // animations of "−" and of reopening; the button itself stays
+            // hidden.
+            styleMask: [.titled, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -179,7 +198,9 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
         // the user did not choose.
         window.delegate = self
         windows[note.id] = window
-        window.orderFrontRegardless()
+        if show {
+            window.orderFrontRegardless()
+        }
         // The text view exists only after SwiftUI builds the hosting
         // view's hierarchy, on the next run loop turn.
         DispatchQueue.main.async { [weak self, weak window] in
@@ -252,13 +273,73 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
     /// Shows a note's window in front, opening it at its saved frame when
     /// it is closed. An open window is not moved, and never duplicated.
     func open(_ id: UUID) {
+        if reopening.contains(id) {
+            // Waiting in the Dock and visible again, but not restored: the
+            // click restores it, as a click on its tile would.
+            if let window = windows[id], window.isMiniaturized, window.alphaValue == 1 {
+                window.deminiaturize(nil)
+            }
+            return
+        }
         if let window = windows[id] {
             window.makeKeyAndOrderFront(nil)
             return
         }
         guard let note = store.notes.first(where: { $0.id == id }) else { return }
         store.setOpen(true, for: id)
-        openWindow(for: note).makeKeyAndOrderFront(nil)
+        guard !skipsAnimation else {
+            openWindow(for: note).makeKeyAndOrderFront(nil)
+            return
+        }
+        reopen(openWindow(for: note, show: false), id: id)
+    }
+
+    /// Brings a note's new window out of the Dock with the system restore
+    /// animation. macOS restores only a window that was on screen when it
+    /// was minimized, so the window is shown invisible, minimized (an
+    /// animation no one sees), made visible again in the Dock, and then
+    /// restored.
+    private func reopen(_ window: NoteWindow, id: UUID) {
+        reopening.insert(id)
+        window.alphaValue = 0
+        window.orderFrontRegardless()
+        once(NSWindow.didMiniaturizeNotification, of: window) { [weak self, weak window] in
+            guard let window, self?.windows[id] === window else { return }
+            window.alphaValue = 1
+            // A restore asked for while the Dock still adds the tile is
+            // ignored; ask on the next turn.
+            DispatchQueue.main.async { window.deminiaturize(nil) }
+        }
+        once(NSWindow.didDeminiaturizeNotification, of: window) { [weak self, weak window] in
+            self?.reopening.remove(id)
+            guard let window, self?.windows[id] === window else { return }
+            window.makeKeyAndOrderFront(nil)
+        }
+        // Minimize once the window is on screen.
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let window, self?.windows[id] === window else { return }
+            window.miniaturize(nil)
+        }
+    }
+
+    /// Notes close and open at once while animations are off in Settings
+    /// or "Reduce motion" is on. Read at each use, so a change applies at
+    /// once.
+    private var skipsAnimation: Bool {
+        !NoteAnimation.isOn || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    /// Runs `action` the first time `window` posts `name`, then stops
+    /// observing.
+    private func once(_ name: Notification.Name, of window: NSWindow, run action: @escaping () -> Void) {
+        let key = UUID()
+        observers[key] = NotificationCenter.default.addObserver(forName: name, object: window,
+                                                               queue: .main) { [weak self] _ in
+            if let token = self?.observers.removeValue(forKey: key) {
+                NotificationCenter.default.removeObserver(token)
+            }
+            action()
+        }
     }
 
     /// Stops tracking a note's window and returns it, ready to close.
@@ -267,6 +348,7 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
     /// a frame the user did not choose.
     private func detachWindow(_ id: UUID) -> NoteWindow? {
         guard let window = windows.removeValue(forKey: id) else { return nil }
+        reopening.remove(id)
         window.delegate = nil
         scrollerObservations.removeValue(forKey: ObjectIdentifier(window))
         fieldEditors.removeValue(forKey: ObjectIdentifier(window))
@@ -290,10 +372,24 @@ final class NoteWindowController: NSObject, NSWindowDelegate {
     }
 
     /// Closes a note's window and keeps the note, listed in the menu.
+    /// The note is saved closed first, then its window minimizes into
+    /// the Dock with the system animation and closes there, which removes
+    /// its Dock tile; quitting during the animation loses nothing.
     private func closeNote(_ id: UUID) {
         guard let window = detachWindow(id) else { return }
         store.setOpen(false, for: id)
-        window.close()
+        // Already in the Dock (closed while reopening): no animation to
+        // wait for.
+        guard !skipsAnimation, !window.isMiniaturized else {
+            window.close()
+            return
+        }
+        // Holds the window until it has closed; the dictionary no longer
+        // does.
+        once(NSWindow.didMiniaturizeNotification, of: window) {
+            window.close()
+        }
+        window.miniaturize(nil)
     }
 
     /// Asks before deleting, in a sheet on the note's window. "Cancel" is
