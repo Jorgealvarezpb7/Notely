@@ -21,7 +21,7 @@ Run `swift test` on macOS and `just test-linux` for Linux. App checks use `just 
 ## 4. Wiring
 
 - [ ] 4.1 In `Sources/Notely/main.swift`, build `NotesRepository(legacy: .standard)` and fall back to `UserDefaultsNoteRepository(defaults: .standard)` on error, logging the error (design.md Decision 5); verify `just build` succeeds
-- [ ] 4.2 Update the doc comment on `NoteRepository` and `UserDefaultsNoteRepository` to describe their roles (protocol vs. legacy/fallback store); verify the comments name `NotesRepository` and `~/.Notely/db/data.sqlite3`
+- [x] 4.2 Update the doc comment on `NoteRepository` and `UserDefaultsNoteRepository` to describe their roles (protocol vs. legacy/fallback store); verify the comments name `NotesRepository` and `~/.Notely/db/data.sqlite3`
 
 ## 5. Integration checks on the Mac
 
