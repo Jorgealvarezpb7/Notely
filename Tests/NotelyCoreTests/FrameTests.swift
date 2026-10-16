@@ -1,6 +1,4 @@
-#if canImport(CoreGraphics)
 import CoreGraphics
-#endif
 import Foundation
 @testable import NotelyCore
 import Testing
@@ -8,7 +6,7 @@ import Testing
 private let screen = NSRect(x: 0, y: 0, width: 1000, height: 800)
 
 struct ParsePairTests {
-    /// macOS writes whole numbers as "{10, 20}"; Linux as "{10.0, 20.0}".
+    /// Accepts "{10, 20}" and "{10.0, 20.0}".
     @Test(arguments: ["{10, 20}", "{10.0, 20.0}", " {10,20} "])
     func parsesBothFormats(_ saved: String) {
         let pair = parsePair(saved)
