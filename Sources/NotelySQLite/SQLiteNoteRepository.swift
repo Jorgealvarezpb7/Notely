@@ -8,6 +8,7 @@ import NotelyCore
 /// `UserDefaults` are copied in. That store is left as it is.
 public final class SQLiteNoteRepository: NoteRepository {
     private let database: NotesDatabase
+    private let log = Log("notes")
 
     public init(url: URL = NotesDatabase.defaultURL, legacy: UserDefaults = .standard) throws {
         database = try NotesDatabase(url: url) {
@@ -17,9 +18,11 @@ public final class SQLiteNoteRepository: NoteRepository {
 
     public func load() -> [Note] {
         do {
-            return try database.all()
+            let notes = try database.all()
+            log.info("loaded \(notes.count) notes")
+            return notes
         } catch {
-            FileHandle.standardError.write(Data("Notely: could not load notes: \(error)\n".utf8))
+            log.error("could not load notes: \(error)")
             return []
         }
     }
@@ -28,8 +31,9 @@ public final class SQLiteNoteRepository: NoteRepository {
     public func save(_ notes: [Note]) {
         do {
             try database.replaceAll(notes)
+            log.debug("saved \(notes.count) notes")
         } catch {
-            FileHandle.standardError.write(Data("Notely: could not save notes: \(error)\n".utf8))
+            log.error("could not save notes: \(error)")
         }
     }
 }

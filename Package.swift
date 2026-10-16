@@ -12,8 +12,11 @@ let package = Package(
                     path: "Tests/NotelySQLiteTests"),
         .target(name: "NotelyLinks", dependencies: ["NotelyCore"], path: "Sources/NotelyLinks"),
         .target(name: "NotelyGitHub", dependencies: ["NotelyCore"], path: "Sources/NotelyGitHub"),
+        .target(name: "NotelyKeychainTokenStore", dependencies: ["NotelyCore"], path: "Sources/NotelyKeychainTokenStore"),
         .target(name: "NotelyUI", dependencies: ["NotelyCore", "NotelyGitHub", "NotelyLinks"], path: "Sources/NotelyUI"),
-        .executableTarget(name: "Notely", dependencies: ["NotelyCore", "NotelyGitHub", "NotelyLinks", "NotelySQLite", "NotelyUI"],
+        .executableTarget(name: "Notely",
+                          dependencies: ["NotelyCore", "NotelyGitHub", "NotelyKeychainTokenStore", "NotelyLinks",
+                                         "NotelySQLite", "NotelyUI"],
                           path: "Sources/Notely"),
     ]
 )

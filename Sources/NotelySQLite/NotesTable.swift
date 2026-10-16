@@ -5,6 +5,8 @@ import NotelyCore
 /// the `position` column. Callers run these inside a transaction when they
 /// need several to succeed together.
 enum NotesTable {
+    private static let log = Log("sqlite")
+
     static let createSQL = """
         CREATE TABLE notes (
             id          TEXT PRIMARY KEY NOT NULL,
@@ -68,6 +70,7 @@ enum NotesTable {
                              tint = ?, github_repo = ?, styles = ?, items = ?
             WHERE id = ?
             """)
+        log.debug("updating note \(note.id)")
         try bindFields(of: note, to: statement, from: 1)
         statement.bind(note.id.uuidString, at: 11)
         try statement.step()

@@ -19,10 +19,11 @@ No linter is configured.
 
 ## Architecture
 
-Five library targets plus a thin executable, wired in `Package.swift`:
+Six library targets plus a thin executable, wired in `Package.swift`:
 
 - `NotelyCore` — all logic and state, no AppKit/UI. `NoteStore` (`@Observable`) holds every note and every mutation rule, and saves through the `NoteRepository` protocol after each change (`UserDefaultsNoteRepository` stores one JSON array under key `notes`, with legacy single-note migration). Also: window frame math (`Geometry/Frames.swift`), `IssueSync` merge rules, `GitHubAccount` and the `TokenStore` / `IssueService` protocols, Markdown block parser, `PageHead` parser, link page key normalization. Tests live in `NotelyCoreTests` and use fakes (`FakeIssueService`) rather than network or Keychain.
-- `NotelyGitHub` — concrete `GitHubClient` (URLSession) and `KeychainTokenStore` (Security framework; token cached in memory per launch to avoid repeated Keychain password prompts).
+- `NotelyGitHub` — concrete `GitHubClient` (URLSession). It logs through both `Logger.github` (unified log) and `Log("github")` (stderr, visible with `just dev`).
+- `NotelyKeychainTokenStore` — `KeychainTokenStore` (Security framework; token cached in memory per launch to avoid repeated Keychain password prompts).
 - `NotelyLinks` — `LinkDetector` (`NSDataDetector`) and link page fetching.
 - `NotelySQLite` — everything SQLite, the only place that imports `SQLite3` or holds SQL: `SQLiteConnection` (internal C API wrapper), self-contained versioned `Migrations`, `NotesTable` queries, the public CRUD type `NotesDatabase` (`all`, `note(id:)`, `insert`, `update`, `delete(id:)`, `replaceAll`) over `~/.Notely/db/data.sqlite3`, and `SQLiteNoteRepository` (the `NoteRepository` the app uses; copies `UserDefaults` notes in once). Schema changes append a `Migration` in `Migrations.swift`.
 - `NotelyUI` — AppKit window controllers (one per note/list, menu, settings), SwiftUI views, text editor/appearance, GitHub controls.

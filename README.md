@@ -42,7 +42,8 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk just dev
 | Target | Role |
 | --- | --- |
 | `NotelyCore` | Note model, store, persistence, sync rules, Markdown parser |
-| `NotelyGitHub` | GitHub client and Keychain token store |
+| `NotelyGitHub` | GitHub client |
+| `NotelyKeychainTokenStore` | GitHub token kept in the login Keychain |
 | `NotelyLinks` | Link detection and page previews |
 | `NotelySQLite` | SQLite database, migrations, and note storage |
 | `NotelyUI` | AppKit windows and SwiftUI views |

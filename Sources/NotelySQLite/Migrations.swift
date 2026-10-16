@@ -1,4 +1,5 @@
 import Foundation
+import NotelyCore
 
 /// One schema step. `version` numbers are consecutive from 1.
 struct Migration {
@@ -24,11 +25,15 @@ enum Migrations {
         let current = try connection.userVersion
         let latest = migrations.map(\.version).max() ?? 0
         guard current < latest else { return }
+        let log = Log("sqlite")
+        log.info("migrating schema from version \(current) to \(latest)")
         try connection.transaction {
             for migration in migrations where migration.version > current {
+                log.debug("applying migration \(migration.version)")
                 try migration.apply(connection)
             }
             if current == 0 {
+                log.info("new database, importing initial notes")
                 try seed?(connection)
             }
             try connection.setUserVersion(latest)

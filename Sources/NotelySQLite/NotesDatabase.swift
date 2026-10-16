@@ -22,6 +22,7 @@ public final class NotesDatabase {
     }
 
     private let connection: SQLiteConnection
+    private let log = Log("sqlite")
 
     /// Opens (creating when missing) the database and runs pending
     /// migrations. `initialNotes` is called only when the database is new,
@@ -33,6 +34,7 @@ public final class NotesDatabase {
 
     init(url: URL, migrations: [Migration], initialNotes: (() -> [Note])? = nil) throws {
         connection = try SQLiteConnection(url: url)
+        log.debug("opened \(url.path)")
         try Migrations.run(on: connection, migrations: migrations, seed: initialNotes.map { notes in
             { connection in
                 for (position, note) in notes().enumerated() {
@@ -56,6 +58,7 @@ public final class NotesDatabase {
         try connection.transaction {
             try NotesTable.insert(note, position: try NotesTable.nextPosition(connection), connection)
         }
+        log.debug("inserted note \(note.id)")
     }
 
     /// Replaces the stored fields of the note with the same id, keeping its
@@ -66,6 +69,7 @@ public final class NotesDatabase {
                 throw NotesDatabaseError.noteNotFound(note.id)
             }
         }
+        log.debug("updated note \(note.id)")
     }
 
     /// Removes the note; does nothing when no note has that id.
@@ -73,6 +77,7 @@ public final class NotesDatabase {
         try connection.transaction {
             try NotesTable.delete(id: id, connection)
         }
+        log.debug("deleted note \(id)")
     }
 
     /// Replaces every stored note, in the order given, all or nothing.

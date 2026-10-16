@@ -1,6 +1,7 @@
 import Foundation
 import NotelyCore
 import NotelyGitHub
+import NotelyKeychainTokenStore
 import NotelyLinks
 import NotelySQLite
 import NotelyUI
@@ -12,11 +13,14 @@ MainActor.assumeIsolated {
     let github = GitHubClient(tokens: tokens)
     // Notes live in ~/.Notely/db/data.sqlite3. When it cannot be opened,
     // notes stay in UserDefaults for this launch so none is lost.
+    let log = Log("app")
+    log.info("starting, log level \(Log.minimumLevel)")
     let repository: any NoteRepository
     do {
         repository = try SQLiteNoteRepository(legacy: .standard)
+        log.info("notes in \(NotesDatabase.defaultURL.path)")
     } catch {
-        FileHandle.standardError.write(Data("Notely: using UserDefaults for notes: \(error)\n".utf8))
+        log.error("database unavailable, using UserDefaults for notes: \(error)")
         repository = UserDefaultsNoteRepository(defaults: .standard)
     }
     NotelyApp.run(
