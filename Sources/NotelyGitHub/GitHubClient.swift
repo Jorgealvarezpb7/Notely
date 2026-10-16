@@ -13,7 +13,9 @@ extension Logger {
 /// Logging: one line per request with the method, the path with the
 /// repository hidden as a private value, the status, the time taken, and
 /// the remaining rate limit. The token, the headers, and the bodies are
-/// never logged, and neither are issue descriptions.
+/// never logged, and neither are issue descriptions. Each line goes to
+/// `Logger.github` and, as `Log("github")`, to standard error. The standard
+/// error lines show the repository only at the `debug` level.
 public final class GitHubClient: IssueService {
     private static let api = "https://api.github.com"
     /// Pages followed at most for one list request.
@@ -25,6 +27,8 @@ public final class GitHubClient: IssueService {
     /// 304 against the rate limit.
     private var etags: [URL: (etag: String, data: Data)] = [:]
     private let lock = NSLock()
+    /// The same lines as `Logger.github`, on standard error for `just dev`.
+    private let log = Log("github")
 
     public init(tokens: any TokenStore) {
         self.tokens = tokens
@@ -136,7 +140,11 @@ public final class GitHubClient: IssueService {
     /// GitHub answers with 304 returns the cached body.
     private func send(_ method: String, _ url: URL, repo: String? = nil, token: String? = nil,
                       body: [String: Any]? = nil) async throws -> (Data, HTTPURLResponse) {
-        guard let token = token ?? tokens.read() else { throw IssueServiceError.unauthorized }
+        let path = Self.loggedPath(url, repo: repo)
+        guard let token = token ?? tokens.read() else {
+            log.warning("\(method) \(path) not sent: no token saved")
+            throw IssueServiceError.unauthorized
+        }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -152,7 +160,7 @@ public final class GitHubClient: IssueService {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
-        let path = Self.loggedPath(url, repo: repo)
+        log.debug("\(method) \(path) [\(repo ?? "-")]\(cached != nil ? " (If-None-Match)" : "")")
         let start = ContinuousClock.now
         let data: Data
         let response: HTTPURLResponse
@@ -165,6 +173,7 @@ public final class GitHubClient: IssueService {
             throw error
         } catch {
             Logger.github.error("\(method, privacy: .public) \(path, privacy: .public) [\(repo ?? "-", privacy: .private)] failed: \(error.localizedDescription, privacy: .public)")
+            log.error("\(method) \(path) failed: \(error.localizedDescription)")
             throw IssueServiceError.offline
         }
         let elapsed = start.duration(to: .now)
@@ -175,6 +184,7 @@ public final class GitHubClient: IssueService {
 
         if (200..<300).contains(status) || status == 304 {
             Logger.github.info("\(method, privacy: .public) \(path, privacy: .public) [\(repo ?? "-", privacy: .private)] -> \(status) in \(milliseconds) ms (rate \(remaining, privacy: .public)/\(limit, privacy: .public))")
+            log.info("\(method) \(path) -> \(status) in \(milliseconds) ms (rate \(remaining)/\(limit))")
             if status == 304, let cached {
                 return (cached.data, response)
             }
@@ -186,6 +196,7 @@ public final class GitHubClient: IssueService {
 
         let message = (try? JSONDecoder().decode(MessageJSON.self, from: data))?.message
         Logger.github.error("\(method, privacy: .public) \(path, privacy: .public) [\(repo ?? "-", privacy: .private)] -> \(status) in \(milliseconds) ms (rate \(remaining, privacy: .public)/\(limit, privacy: .public)): \(message ?? "no message", privacy: .public)")
+        log.error("\(method) \(path) -> \(status) in \(milliseconds) ms (rate \(remaining)/\(limit)): \(message ?? "no message")")
         switch status {
         case 301: throw IssueServiceError.moved
         case 401: throw IssueServiceError.unauthorized
@@ -224,6 +235,7 @@ public final class GitHubClient: IssueService {
             return try JSONDecoder().decode(type, from: data)
         } catch {
             Logger.github.error("Unexpected response from GitHub: \(error.localizedDescription, privacy: .public)")
+            log.error("unexpected response from GitHub: \(error.localizedDescription)")
             throw IssueServiceError.server(200)
         }
     }
