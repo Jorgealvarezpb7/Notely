@@ -1,9 +1,5 @@
 import Foundation
-#if canImport(SQLite3)
 import SQLite3
-#else
-import CSQLite
-#endif
 
 /// A failed SQLite call: its result code and SQLite's message.
 public struct SQLiteError: Error, CustomStringConvertible {
@@ -13,32 +9,19 @@ public struct SQLiteError: Error, CustomStringConvertible {
     public var description: String { "SQLite error \(code): \(message)" }
 }
 
-/// The data-persistence layer: one SQLite3 connection to the Notely
-/// database, at `~/.Notely/db/data.sqlite3` unless a test names another
-/// file. It knows nothing about notes; subclasses (`NotesRepository`)
-/// own their tables and use `execute`, `prepare`, and `transaction`.
-open class NotelyRepository {
-    /// `~/.Notely`.
-    public static var homeDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Notely", isDirectory: true)
-    }
-
-    /// `~/.Notely/db/data.sqlite3`.
-    public static var defaultDatabaseURL: URL {
-        homeDirectory
-            .appendingPathComponent("db", isDirectory: true)
-            .appendingPathComponent("data.sqlite3")
-    }
-
+/// One SQLite3 connection to a database file. It knows nothing about
+/// notes: `Migrations` and `NotesTable` own the schema and the queries
+/// and use `execute`, `prepare`, and `transaction`.
+final class SQLiteConnection {
     private var handle: OpaquePointer?
 
     /// Creates missing folders, then opens the database file, creating it
     /// when it does not exist. Never removes or replaces a file.
-    public init(databaseURL: URL = NotelyRepository.defaultDatabaseURL) throws {
+    init(url: URL) throws {
         try FileManager.default.createDirectory(
-            at: databaseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         var opened: OpaquePointer?
-        let code = sqlite3_open_v2(databaseURL.path, &opened, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
+        let code = sqlite3_open_v2(url.path, &opened, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
         guard code == SQLITE_OK else {
             let message = opened.map { String(cString: sqlite3_errmsg($0)) } ?? "could not open database"
             sqlite3_close_v2(opened)
@@ -65,21 +48,26 @@ open class NotelyRepository {
     }
 
     /// Runs statements that return no rows.
-    public func execute(_ sql: String) throws {
+    func execute(_ sql: String) throws {
         let code = sqlite3_exec(handle, sql, nil, nil, nil)
         guard code == SQLITE_OK else { throw lastError(code) }
     }
 
-    public func prepare(_ sql: String) throws -> Statement {
+    func prepare(_ sql: String) throws -> Statement {
         var statement: OpaquePointer?
         let code = sqlite3_prepare_v2(handle, sql, -1, &statement, nil)
         guard code == SQLITE_OK, let statement else { throw lastError(code) }
         return Statement(statement, owner: self)
     }
 
+    /// Rows changed by the most recent insert, update, or delete.
+    var changes: Int {
+        Int(sqlite3_changes(handle))
+    }
+
     /// Runs `body` in one transaction: committed when it returns, rolled
     /// back when it throws.
-    public func transaction<T>(_ body: () throws -> T) throws -> T {
+    func transaction<T>(_ body: () throws -> T) throws -> T {
         try execute("BEGIN IMMEDIATE")
         do {
             let result = try body()
@@ -92,23 +80,24 @@ open class NotelyRepository {
     }
 
     /// The schema version, in `PRAGMA user_version`; 0 for a new file.
-    public var userVersion: Int {
-        get {
-            guard let statement = try? prepare("PRAGMA user_version"),
-                  (try? statement.step()) == true else { return 0 }
+    var userVersion: Int {
+        get throws {
+            let statement = try prepare("PRAGMA user_version")
+            try statement.step()
             return statement.int(at: 0) ?? 0
-        }
-        set {
-            try? execute("PRAGMA user_version = \(newValue)")
         }
     }
 
-    /// One prepared statement, finalized when released.
-    public final class Statement {
-        private let statement: OpaquePointer
-        private let owner: NotelyRepository
+    func setUserVersion(_ version: Int) throws {
+        try execute("PRAGMA user_version = \(version)")
+    }
 
-        fileprivate init(_ statement: OpaquePointer, owner: NotelyRepository) {
+    /// One prepared statement, finalized when released.
+    final class Statement {
+        private let statement: OpaquePointer
+        private let owner: SQLiteConnection
+
+        fileprivate init(_ statement: OpaquePointer, owner: SQLiteConnection) {
             self.statement = statement
             self.owner = owner
         }
@@ -122,7 +111,7 @@ open class NotelyRepository {
         private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
         /// Binds at a 1-based `index`. `nil` binds NULL.
-        public func bind(_ value: String?, at index: Int32) {
+        func bind(_ value: String?, at index: Int32) {
             if let value {
                 sqlite3_bind_text(statement, index, value, -1, Self.transient)
             } else {
@@ -130,7 +119,7 @@ open class NotelyRepository {
             }
         }
 
-        public func bind(_ value: Int?, at index: Int32) {
+        func bind(_ value: Int?, at index: Int32) {
             if let value {
                 sqlite3_bind_int64(statement, index, Int64(value))
             } else {
@@ -140,7 +129,7 @@ open class NotelyRepository {
 
         /// `true` when a row is ready, `false` when the statement is done.
         @discardableResult
-        public func step() throws -> Bool {
+        func step() throws -> Bool {
             let code = sqlite3_step(statement)
             switch code {
             case SQLITE_ROW: return true
@@ -150,19 +139,19 @@ open class NotelyRepository {
         }
 
         /// Clears bindings and rewinds, to run again with new values.
-        public func reset() {
+        func reset() {
             sqlite3_reset(statement)
             sqlite3_clear_bindings(statement)
         }
 
         /// Column readers use 0-based indexes; `nil` for NULL.
-        public func string(at index: Int32) -> String? {
+        func string(at index: Int32) -> String? {
             guard sqlite3_column_type(statement, index) != SQLITE_NULL,
                   let text = sqlite3_column_text(statement, index) else { return nil }
             return String(cString: text)
         }
 
-        public func int(at index: Int32) -> Int? {
+        func int(at index: Int32) -> Int? {
             guard sqlite3_column_type(statement, index) != SQLITE_NULL else { return nil }
             return Int(sqlite3_column_int64(statement, index))
         }

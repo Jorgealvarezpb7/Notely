@@ -29,6 +29,14 @@ just install   # replace ~/Applications/Notely.app
 just run       # install and open
 ```
 
+## Development
+
+`just dev` builds a debug binary and runs it straight from `.build`, without the app bundle. With only the Command Line Tools installed (no Xcode), the newest SDK can fail to compile `@State` with `plugin for module 'SwiftUIMacros' not found`. Build against the older SDK instead:
+
+```sh
+SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk just dev
+```
+
 ## Project layout
 
 | Target | Role |
@@ -36,6 +44,7 @@ just run       # install and open
 | `NotelyCore` | Note model, store, persistence, sync rules, Markdown parser |
 | `NotelyGitHub` | GitHub client and Keychain token store |
 | `NotelyLinks` | Link detection and page previews |
+| `NotelySQLite` | SQLite database, migrations, and note storage |
 | `NotelyUI` | AppKit windows and SwiftUI views |
 | `Notely` | App entry point |
 

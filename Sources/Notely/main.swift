@@ -2,6 +2,7 @@ import Foundation
 import NotelyCore
 import NotelyGitHub
 import NotelyLinks
+import NotelySQLite
 import NotelyUI
 
 // Composition root: builds the shared state once and hands it to the app.
@@ -13,7 +14,7 @@ MainActor.assumeIsolated {
     // notes stay in UserDefaults for this launch so none is lost.
     let repository: any NoteRepository
     do {
-        repository = try NotesRepository(legacy: .standard)
+        repository = try SQLiteNoteRepository(legacy: .standard)
     } catch {
         FileHandle.standardError.write(Data("Notely: using UserDefaults for notes: \(error)\n".utf8))
         repository = UserDefaultsNoteRepository(defaults: .standard)

@@ -19,6 +19,22 @@ The app SHALL keep notes and lists in a SQLite database file at `~/.Notely/db/da
 - **THEN** the app opens those notes
 - **AND** the file is not recreated
 
+### Requirement: Versioned schema
+The database SHALL record its schema version, and the app MUST bring the schema up to the latest version when it opens the database, applying only the steps not yet applied and in order. A step MUST be applied together with its effects or not at all. A database written by a newer version of the app MUST be opened without changes to its schema.
+
+#### Scenario: New database gets the latest schema
+- **WHEN** the app creates the database
+- **THEN** the schema version is the latest one and the `notes` table exists
+
+#### Scenario: Reopening does not repeat steps
+- **WHEN** the database is already at the latest schema version and the user launches the app
+- **THEN** no schema step runs and the stored notes are unchanged
+
+#### Scenario: Failed step leaves no half-built schema
+- **WHEN** a schema step fails while the app creates the database
+- **THEN** the database has no `notes` table and its schema version is still 0
+- **AND** the next launch tries the steps again
+
 ### Requirement: One row per note
 The `notes` table SHALL hold one row per saved note or list, and no other rows. A row MUST keep everything the note had when saved: its id, kind, text, styles, title, items with their checked state and GitHub fields, tint, linked repository, position, size, and whether its window is open. The order of notes MUST survive a relaunch.
 

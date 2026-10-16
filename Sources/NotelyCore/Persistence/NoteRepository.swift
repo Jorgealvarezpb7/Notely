@@ -1,8 +1,8 @@
 import Foundation
 
 /// Where notes are kept between launches. `NoteStore` loads once at start
-/// and saves the whole list after every change. `NotesRepository` is the
-/// store the app uses, a SQLite database at `~/.Notely/db/data.sqlite3`.
+/// and saves the whole list after every change. `SQLiteNoteRepository` (in
+/// `NotelySQLite`) is the store the app uses, a SQLite database at `~/.Notely/db/data.sqlite3`.
 public protocol NoteRepository {
     /// Every saved note, with damaged data repaired or replaced.
     func load() -> [Note]
@@ -10,7 +10,7 @@ public protocol NoteRepository {
 }
 
 /// Keeps notes as one JSON array in `UserDefaults`. It is the store of
-/// earlier versions: `NotesRepository` copies notes from it once, and the
+/// earlier versions: `SQLiteNoteRepository` copies notes from it once, and the
 /// app falls back to it when the database cannot be opened.
 public struct UserDefaultsNoteRepository: NoteRepository {
     private static let notesKey = "notes"
@@ -70,7 +70,7 @@ public struct UserDefaultsNoteRepository: NoteRepository {
 extension Note {
     /// The note with style runs trimmed to its text, and runs outside it
     /// dropped. Runs outside a note's text come from damaged data.
-    func clampingStyles() -> Note {
+    public func clampingStyles() -> Note {
         guard let styles else { return self }
         let length = text.utf16.count
         var note = self
