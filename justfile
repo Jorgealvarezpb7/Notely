@@ -16,20 +16,12 @@ dkc:
         -w /app \
         ghcr.io/leoborai/dkc:latest
 
-# Stops early outside macOS: the dkc container has no AppKit or codesign
-_macos:
-    @[ "$(uname)" = Darwin ] || { echo "error: run this recipe on the macOS host, not in the dkc container" >&2; exit 1; }
-
 # Runs the tests
 test:
     swift test
 
-# Runs the NotelyCore tests on Linux in Docker, from the macOS host
-test-linux:
-    docker run --rm -v "$(pwd):/app" -w /app swift:6.0 swift test --scratch-path .build/linux
-
 # Builds .build/AppIcon.icns from Packaging/AppIcon.png at every standard size
-_icon: _macos
+_icon
     #!/usr/bin/env bash
     set -euo pipefail
     iconset=.build/AppIcon.iconset
@@ -42,7 +34,7 @@ _icon: _macos
     iconutil -c icns "$iconset" -o .build/AppIcon.icns
 
 # Builds and ad-hoc signs Notely.app without launching it
-build: _macos _icon
+build: _icon
     swift build -c release
     rm -rf {{app}}
     mkdir -p {{app}}/Contents/MacOS {{app}}/Contents/Resources

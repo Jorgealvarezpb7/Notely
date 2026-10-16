@@ -1,6 +1,4 @@
-#if canImport(CoreGraphics)
 import CoreGraphics
-#endif
 import Foundation
 
 /// Moves `frame` the shortest distance (x and y only) to sit fully inside
