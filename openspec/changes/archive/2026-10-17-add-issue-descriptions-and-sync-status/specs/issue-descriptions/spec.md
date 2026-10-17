@@ -62,6 +62,15 @@ The popover SHALL show "Edit" when the user may change the item, under the same 
 - **WHEN** the user has read access and opens the description of an issue someone else opened
 - **THEN** the popover shows the rendered description and no "Edit"
 
+### Requirement: Description stored when editing ends
+While the user edits a description, typing SHALL NOT change the item's stored description. The text MUST be stored when editing ends, by "Done" or by closing the popover.
+
+#### Scenario: Typing is not stored until editing ends
+- **WHEN** the user clicks "Edit" on issue #4 and types "Only on Safari"
+- **THEN** the item's stored description is unchanged
+- **AND WHEN** the user clicks "Done"
+- **THEN** the item's description is "Only on Safari"
+
 ### Requirement: Descriptions sent to GitHub
 A description change SHALL be sent to GitHub when editing ends, and each change MUST show in the popover at once, before GitHub answers. It MUST wait, be kept across quit, and be sent again at each refresh until GitHub accepts it, as title changes do. An item with no issue yet MUST send its description with the issue it creates. While the user edits a description, refreshes MUST NOT replace its text.
 

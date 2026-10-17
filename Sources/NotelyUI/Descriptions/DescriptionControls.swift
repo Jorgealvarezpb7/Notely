@@ -26,7 +26,10 @@ final class DescriptionControls: NSObject, ObservableObject, NSPopoverDelegate {
     private var anchors: [UUID: WeakButton] = [:]
     private var popover: NSPopover?
     /// The item whose description is being edited in the open popover.
-    private var editingItem: UUID?
+    @Published private(set) var editingItem: UUID?
+    /// The description being edited. Typing changes only this; it is
+    /// stored when editing ends, so each key is not saved or re-rendered.
+    @Published var draft = ""
 
     func register(_ button: NSButton, for item: UUID) {
         anchors[item] = WeakButton(button)
@@ -63,7 +66,7 @@ final class DescriptionControls: NSObject, ObservableObject, NSPopoverDelegate {
             sync: sync,
             id: id,
             itemID: item,
-            onEditingChanged: { [weak self] editing in self?.setEditing(editing ? item : nil) }
+            controls: self
         ))
         controller.tint = tintColor(store.note(id)?.tint)
         controller.sizingOptions = .preferredContentSize
@@ -76,21 +79,26 @@ final class DescriptionControls: NSObject, ObservableObject, NSPopoverDelegate {
         openItem = item
     }
 
-    private func setEditing(_ item: UUID?) {
-        guard let sync, let id else { return }
-        let ended = editingItem != nil && item == nil
+    /// "Edit": the draft starts from the item's description.
+    func beginEditing(_ item: UUID) {
+        guard let store, let sync, let id else { return }
+        draft = store.note(id)?.items?.first(where: { $0.id == item })?.body ?? ""
         editingItem = item
         sync.setEditingBody(item, in: id)
-        if ended {
-            sync.itemsChanged(id)
-        }
+    }
+
+    /// "Done", or the popover closing: stores the draft, then sends it.
+    func endEditing() {
+        guard let store, let sync, let id, let item = editingItem else { return }
+        store.setItemBody(draft, item: item, for: id)
+        editingItem = nil
+        sync.setEditingBody(nil, in: id)
+        sync.itemsChanged(id)
     }
 
     /// Closing the popover ends editing, so the change is sent.
     private func closed() {
-        if editingItem != nil {
-            setEditing(nil)
-        }
+        endEditing()
         popover = nil
         openItem = nil
     }
@@ -176,8 +184,9 @@ struct DescriptionPopover: View {
     let sync: SyncController
     let id: UUID
     let itemID: UUID
-    let onEditingChanged: (Bool) -> Void
-    @State private var isEditing = false
+    @ObservedObject var controls: DescriptionControls
+
+    private var isEditing: Bool { controls.editingItem == itemID }
 
     private var item: ListItem? {
         store.note(id)?.items?.first(where: { $0.id == itemID })
@@ -193,10 +202,7 @@ struct DescriptionPopover: View {
                     conflict(held)
                 }
                 if isEditing {
-                    TextEditor(text: Binding(
-                        get: { item.body ?? "" },
-                        set: { store.setItemBody($0, item: itemID, for: id) }
-                    ))
+                    TextEditor(text: $controls.draft)
                     .font(.body)
                     // The popover's own background, as in the view mode.
                     .scrollContentBackground(.hidden)
@@ -212,9 +218,9 @@ struct DescriptionPopover: View {
                     Spacer()
                     if isEditing {
                         // No Return shortcut: Return types a new line.
-                        Button("Done") { isEditing = false }
+                        Button("Done") { controls.endEditing() }
                     } else if sync.isEditable(item, in: id) {
-                        Button("Edit") { isEditing = true }
+                        Button("Edit") { controls.beginEditing(itemID) }
                     }
                 }
             } else {
@@ -224,7 +230,6 @@ struct DescriptionPopover: View {
         }
         .padding(12)
         .frame(width: 360)
-        .onChange(of: isEditing) { onEditingChanged(isEditing) }
     }
 
     private func conflict(_ held: String) -> some View {
@@ -250,6 +255,10 @@ struct DescriptionPopover: View {
     }
 
     private func resolve(keepMine: Bool) {
+        // "Use GitHub's" replaces the draft too, so "Done" keeps the choice.
+        if !keepMine, isEditing, let held = item?.heldBody {
+            controls.draft = held
+        }
         store.resolveConflict(item: itemID, for: id, keepMine: keepMine)
         sync.itemsChanged(id)
     }
