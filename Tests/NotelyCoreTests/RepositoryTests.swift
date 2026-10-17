@@ -154,3 +154,25 @@ struct SavedFormatTests {
         #expect(try normalized(saved) == normalized(Data(savedFixture.utf8)))
     }
 }
+
+struct SavedNotesReadOnlyTests {
+    @Test func savedNotesLeavesEveryKeyUnchanged() {
+        let defaults = TestDefaults()
+        defaults.defaults.set("Hello", forKey: "noteText")
+        defaults.defaults.set("{1, 2}", forKey: "panelOrigin")
+
+        let notes = UserDefaultsNoteRepository(defaults: defaults.defaults).savedNotes()
+        #expect(notes.first?.text == "Hello")
+        #expect(defaults.defaults.string(forKey: "noteText") == "Hello")
+        #expect(defaults.defaults.string(forKey: "panelOrigin") == "{1, 2}")
+        #expect(defaults.defaults.data(forKey: "notes") == nil)
+    }
+
+    @Test func savedNotesOnJunkIsOneEmptyNoteWithoutWriting() {
+        let defaults = TestDefaults()
+        defaults.defaults.set(Data("junk".utf8), forKey: "notes")
+        let notes = UserDefaultsNoteRepository(defaults: defaults.defaults).savedNotes()
+        #expect(notes.count == 1)
+        #expect(defaults.defaults.data(forKey: "notes") == Data("junk".utf8))
+    }
+}
