@@ -86,6 +86,10 @@ How to verify:
     - "Conflict found": edit on GitHub while the popover is in edit mode, then click "Done"
     - "Keep mine" and "Use GitHub's"
 - [x] 5.4 Verify "Log without descriptions" and "Line breaks only". For the second, edit the scratch issue's body on github.com, refresh, then refresh again: the log shows no `PATCH`.
+- [x] 5.5 Keep the description being edited in `DescriptionControls.draft` (Decision 6). Store it with `setItemBody` only when editing ends: on "Done", on popover close, or when another item's popover opens. "Use GitHub's" replaces the draft.
+  - Verify "Typing is not stored until editing ends". Run `NOTELY_LOG_LEVEL=debug SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk just dev`, type in edit mode, and confirm that the terminal shows no `updated note` line per key, and one after "Done". The line goes to stderr only, so `log stream` does not show it.
+  - Verify that closing the popover by clicking outside keeps and sends the typed text.
+  - Verify "Edit and finish" and "Conflict found" again.
 
 ## 6. Status icon and shortcuts
 

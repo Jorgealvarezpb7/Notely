@@ -113,7 +113,8 @@ Anything else, including tables, images, quotes, and HTML, is a paragraph shown 
          "Keep mine" / "Use GitHub's"  (shown above view/edit)
 ```
 
-- **Edit**: entering edit mode sets `editingBody`. Each keystroke calls `NoteStore.setItemBody`. "Done", or the popover closing, clears `editingBody` and calls `SyncController.itemsChanged`, which starts the 0.5 s push debounce.
+- **Edit**: entering edit mode sets `editingBody` and copies `body` into a draft, `DescriptionControls.draft`, which the `TextEditor` binds to. Typing changes only the draft: nothing is saved and the list does not re-render. Editing ends with "Done", the popover closing, or another item's popover opening. When it ends, `NoteStore.setItemBody(draft)` runs first, then `editingBody` is cleared and `SyncController.itemsChanged` starts the 0.5 s push debounce. The draft lives in the controller, not in view `@State`, so `closed()` can store it.
+- **Conflict while editing**: "Use GitHub's" also replaces the draft, so the next "Done" does not overwrite the choice.
 - **Opening**: opening a second item's popover closes the first, which ends its editing.
 - **Anchor**: the row's description icon is laid out on every linked row, at opacity 0 when hidden, so Cmd+D and the hover state have an anchor. It is a plain button, like `CheckCircle`, so clicking it does not take focus from the item.
 - **Rights**: rights come from `SyncController.isEditable`, unchanged.
