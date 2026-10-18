@@ -43,7 +43,9 @@ struct NoteView: View {
         NoteEditor(store: store, appearance: appearance, linkPages: linkPages, family: appearance.family,
                    size: appearance.size, id: id, state: editorState)
         .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 12)
+        // 6 here and 6 of text inset in `NoteEditor`: the text sits 12
+        // from the edges, and the scroller 6, clear of the cards.
+        .padding(.horizontal, 6)
         .padding(.top, barHeight + barGap)
         .padding(.bottom, bottomBarHeight + barGap)
         // The bars are overlays outside the padding, so their fill runs

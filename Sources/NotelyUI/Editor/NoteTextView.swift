@@ -29,6 +29,10 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
     private var cardLayoutPending = false
     /// The room last laid out above each card paragraph, by paragraph start.
     private var cardRooms: [Int: CGFloat] = [:]
+    /// Room for the first paragraph's card, above the text. TextKit
+    /// leaves out the space before the first paragraph, so its card's
+    /// room moves the text container down instead.
+    private var topRoom: CGFloat = 0
 
     deinit {
         if let pagesObserver { NotificationCenter.default.removeObserver(pagesObserver) }
@@ -179,6 +183,7 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
         // Paragraphs moved; lay out every card paragraph's room again on
         // the next relayout.
         cardRooms = [:]
+        updateTopRoom()
         placeCards()
         requestTimer?.invalidate()
         requestTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: false) { [weak self] _ in
@@ -240,7 +245,8 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
     /// the saved text, undo, and copy, never see the room.
     func textContentStorage(_ textContentStorage: NSTextContentStorage,
                             textParagraphWith range: NSRange) -> NSTextParagraph? {
-        guard range.length > 0, let storage = textStorage, NSMaxRange(range) <= storage.length,
+        // The first paragraph's room is `topRoom`, not paragraph spacing.
+        guard range.location > 0, range.length > 0, let storage = textStorage, NSMaxRange(range) <= storage.length,
               let card = card(inParagraph: range) else { return nil }
         let text = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         let current = text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
@@ -254,6 +260,7 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
     /// card needs now: after a page arrives or the width changes. Marks
     /// the text as edited without changing it, which registers no undo.
     private func relayoutCards() {
+        updateTopRoom()
         guard textLayoutManager != nil, let storage = textStorage, storage.length > 0 else {
             placeCards()
             return
@@ -294,6 +301,29 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
     override func layout() {
         super.layout()
         placeCards()
+    }
+
+    /// The text starts below the first paragraph's card. Caret, selection,
+    /// link clicks, the placeholder, and the cards all follow it.
+    override var textContainerOrigin: NSPoint {
+        let origin = super.textContainerOrigin
+        return NSPoint(x: origin.x, y: origin.y + topRoom)
+    }
+
+    /// Sets `topRoom` from the first paragraph's card: the card's height
+    /// and the gap under it, or 0 when that paragraph has no card yet.
+    private func updateTopRoom() {
+        var room: CGFloat = 0
+        if let first = linkParagraphs.first, first.range.location == 0,
+           let page = linkPages?.page(for: first.url) {
+            room = LinkCardLayout.height(for: page, width: cardWidth) + LinkCardLayout.gap
+        }
+        guard room != topRoom else { return }
+        topRoom = room
+        invalidateTextContainerOrigin()
+        sizeToFit()
+        needsLayout = true
+        needsDisplay = true
     }
 
     /// Puts a card in the room above each paragraph whose page has
@@ -343,7 +373,14 @@ final class NoteTextView: NSTextView, LinkHost, NSTextContentStorageDelegate {
     /// A new width wraps the text and the cards differently.
     override func setFrameSize(_ newSize: NSSize) {
         let widthChanged = newSize.width != frame.width
-        super.setFrameSize(newSize)
+        // The text view sizes itself to its text, which leaves out
+        // `topRoom`; grow by it so the last line is not cut off.
+        var size = newSize
+        if isVerticallyResizable, topRoom > 0, let layout = textLayoutManager {
+            let needed = layout.usageBoundsForTextContainer.height + topRoom + 2 * textContainerInset.height
+            size.height = max(size.height, needed)
+        }
+        super.setFrameSize(size)
         guard widthChanged, !cardLayoutPending else { return }
         cardLayoutPending = true
         DispatchQueue.main.async { [weak self] in
