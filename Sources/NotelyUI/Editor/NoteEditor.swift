@@ -37,7 +37,7 @@ struct NoteEditor: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: contentSize.width,
                                                        height: .greatestFiniteMagnitude)
-        textView.textContainerInset = .zero
+        textView.textContainerInset = NSSize(width: 6, height: 0)
         textView.isRichText = true
         textView.importsGraphics = false
         textView.usesFontPanel = false

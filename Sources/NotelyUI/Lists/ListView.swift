@@ -119,13 +119,17 @@ struct ListView: View {
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
+                // With the 2 outside the scroll view, the rows sit 12 from
+                // the edges and the scroller 2, clear of the description
+                // icons and cards.
+                .padding(.horizontal, 10)
                 // Reaches down to the bottom of the visible area, so a
                 // click on the empty space below the rows ends editing.
                 .frame(minHeight: proxy.size.height, alignment: .top)
                 .background(EndEditingView(drags: false))
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 2)
         .padding(.top, barHeight + barGap)
         .padding(.bottom, bottomBarHeight + barGap)
         // The bars are overlays, not rows of a stack: AppKit orders the
