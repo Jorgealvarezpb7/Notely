@@ -50,3 +50,5 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk just dev
 | `Notely` | App entry point |
 
 Features are specified with [OpenSpec](openspec/specs).
+
+Made by [Jorge Álvarez](https://alvarezjorge.com).
