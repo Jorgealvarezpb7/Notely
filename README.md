@@ -14,6 +14,24 @@
 - A menu window to browse, create, and open notes
 - Sync notes with GitHub issues, with the token kept in the login Keychain
 
+## Install
+
+Notely runs on macOS 14 or later, on Apple Silicon and Intel.
+
+1. Download `Notely.dmg` from the [latest release](https://github.com/Jorgealvarezpb7/notely/releases/latest).
+2. Open it and drag Notely to Applications.
+3. Allow the first launch. Notely isn't notarized, so macOS blocks it until you do:
+   - **macOS 15 or later:** try to open Notely once, then go to System Settings → Privacy & Security and click **Open Anyway**.
+   - **macOS 14:** Control-click Notely in Applications and choose **Open**.
+
+If macOS still won't open it, run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Notely.app
+```
+
+After updating, macOS may ask again for Keychain access to your GitHub token.
+
 ## Requirements
 
 - macOS 14 or later

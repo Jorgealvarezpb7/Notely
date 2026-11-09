@@ -31,13 +31,19 @@ _icon:
 # Builds and ad-hoc signs Notely.app without launching it
 build: _icon
     swift build -c release
-    rm -rf {{app}}
-    mkdir -p {{app}}/Contents/MacOS {{app}}/Contents/Resources
-    cp .build/release/Notely {{app}}/Contents/MacOS/Notely
-    cp Packaging/Info.plist {{app}}/Contents/Info.plist
-    cp .build/AppIcon.icns {{app}}/Contents/Resources/AppIcon.icns
-    codesign --force --sign - {{app}}
-    codesign --verify {{app}}
+    ./bin/bundle.sh {{app}} .build/release/Notely
+
+# Builds and ad-hoc signs a universal (arm64 and x86_64) Notely.app
+build-universal: _icon
+    ./bin/build-universal.sh {{app}}
+
+# Builds the universal app and packages it as Notely.dmg
+dmg: build-universal
+    ./bin/dmg.sh {{app}}
+
+# Tags v<version> from main and publishes Notely.dmg as a GitHub Release
+release:
+    ./bin/release.sh
 
 # Replaces ~/Applications/Notely.app, quitting a running Notely first
 install: build
